@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import '../../data/models/song_model.dart';
+import 'settings_provider.dart';
 import '../../data/repositories/youtube_audio_repository.dart';
 
 enum PlaybackRepeatMode { off, all, one }
@@ -36,7 +37,9 @@ class AudioPlayerState {
   });
 
   bool get hasCurrentSong => currentSong != null;
-  bool get hasNext => queue.isNotEmpty && (currentIndex < queue.length - 1 || repeatMode == PlaybackRepeatMode.all);
+  bool get hasNext =>
+      queue.isNotEmpty &&
+      (currentIndex < queue.length - 1 || repeatMode == PlaybackRepeatMode.all);
   bool get hasPrevious => queue.isNotEmpty && currentIndex > 0;
 
   AudioPlayerState copyWith({
@@ -72,18 +75,21 @@ class AudioPlayerState {
 
 final youtubeAudioRepoProvider = Provider<YoutubeAudioRepository>((ref) {
   final repo = YoutubeAudioRepository();
+  ref.listen(settingsProvider.select((s) => s.audioQuality), (_, quality) {
+    repo.quality = quality.key;
+  }, fireImmediately: true);
   ref.onDispose(() => repo.dispose());
   return repo;
 });
 
 final audioPlayerProvider =
     StateNotifierProvider<AudioPlayerNotifier, AudioPlayerState>((ref) {
-  final ytRepo = ref.watch(youtubeAudioRepoProvider);
-  return AudioPlayerNotifier(ytRepo);
-});
+      final ytRepo = ref.watch(youtubeAudioRepoProvider);
+      return AudioPlayerNotifier(ytRepo);
+    });
 
 class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
-  final AudioPlayer _player = AudioPlayer();
+  final AudioPlayer _player;
   final YoutubeAudioRepository _ytRepo;
 
   StreamSubscription<PlayerState>? _playerStateSub;
@@ -93,8 +99,17 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
 
   List<SongModel> _originalQueue = [];
   bool _hasPrefetchedNext = false;
+  int _loadGeneration = 0;
+  bool _wantsPlayback = false;
+  bool _sourceReady = false;
+  bool _completedHandled = false;
 
-  AudioPlayerNotifier(this._ytRepo) : super(const AudioPlayerState()) {
+  bool _isCurrentLoad(int generation) =>
+      mounted && generation == _loadGeneration;
+
+  AudioPlayerNotifier(this._ytRepo, {AudioPlayer? player})
+    : _player = player ?? AudioPlayer(),
+      super(const AudioPlayerState()) {
     _initAudioStreams();
   }
 
@@ -103,16 +118,23 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
       final isPlaying = playerState.playing;
       final processingState = playerState.processingState;
 
-      final isBuffering = processingState == ProcessingState.buffering ||
+      final isBuffering =
+          processingState == ProcessingState.buffering ||
           processingState == ProcessingState.loading;
 
       state = state.copyWith(
-        isPlaying: isPlaying,
+        isPlaying: state.isLoadingStream ? _wantsPlayback : isPlaying,
         isBuffering: isBuffering,
       );
 
       // Otomatis putar lagu berikutnya saat selesai
-      if (processingState == ProcessingState.completed) {
+      if (processingState != ProcessingState.completed) {
+        _completedHandled = false;
+      }
+      if (!state.isLoadingStream &&
+          !_completedHandled &&
+          processingState == ProcessingState.completed) {
+        _completedHandled = true;
         _onTrackCompleted();
       }
     });
@@ -156,13 +178,23 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
     }
   }
 
+  VoidCallback? onTrackEnded;
+
   void _onTrackCompleted() {
+    if (onTrackEnded != null) {
+      final callback = onTrackEnded;
+      onTrackEnded = null;
+      callback!();
+      return;
+    }
+
     if (state.repeatMode == PlaybackRepeatMode.one) {
       _player.seek(Duration.zero);
       _player.play();
     } else if (state.hasNext) {
       playNext();
-    } else if (state.repeatMode == PlaybackRepeatMode.all && state.queue.isNotEmpty) {
+    } else if (state.repeatMode == PlaybackRepeatMode.all &&
+        state.queue.isNotEmpty) {
       _playSongAtIndex(0);
     } else {
       state = state.copyWith(isPlaying: false);
@@ -171,13 +203,15 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
 
   /// Memulai pemutaran lagu [song] dengan antrean opsional [queue]
   Future<void> playSong(SongModel song, {List<SongModel>? queue}) async {
-    List<SongModel> activeQueue = queue ?? state.queue;
+    List<SongModel> activeQueue = List.of(queue ?? state.queue);
     if (!activeQueue.contains(song)) {
       activeQueue = [...activeQueue, song];
     }
 
-    _originalQueue = List.from(activeQueue);
     final targetIndex = activeQueue.indexWhere((s) => s.id == song.id);
+    // Keep the selected recording metadata when revisiting it from the queue.
+    if (targetIndex >= 0) activeQueue[targetIndex] = song;
+    _originalQueue = List.from(activeQueue);
 
     state = state.copyWith(
       currentSong: song,
@@ -191,19 +225,38 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
     await _loadAndPlayStream(song);
   }
 
-  Future<void> _loadAndPlayStream(SongModel song, {bool isRetry = false}) async {
+  Future<void> _loadAndPlayStream(
+    SongModel song, {
+    bool isRetry = false,
+    int? generation,
+  }) async {
+    final request = generation ?? ++_loadGeneration;
+    if (!_isCurrentLoad(request)) return;
+    if (!isRetry) _wantsPlayback = true;
+    _sourceReady = false;
     try {
       _hasPrefetchedNext = false;
-      state = state.copyWith(isLoadingStream: true, clearError: true);
+      state = state.copyWith(
+        isLoadingStream: true,
+        isPlaying: _wantsPlayback,
+        duration: Duration.zero,
+        clearError: true,
+      );
+      await _player.stop();
+      if (!_isCurrentLoad(request)) return;
 
       final streamResult = await _ytRepo.getAudioStream(
         song,
         forceRefresh: isRetry,
       );
+      if (!_isCurrentLoad(request)) return;
       if (streamResult == null) {
         state = state.copyWith(
           isLoadingStream: false,
-          errorMessage: 'Gagal mengekstrak audio dari "${song.title}". Silakan coba lagu lain.',
+          isPlaying: false,
+          isBuffering: false,
+          errorMessage:
+              'Gagal mengekstrak audio dari "${song.title}". Silakan coba lagu lain.',
         );
         return;
       }
@@ -233,35 +286,79 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
         ),
       );
 
-      await _player.stop();
       await _player.setAudioSource(audioSource);
-      await _player.play();
-
+      if (!_isCurrentLoad(request)) return;
+      _sourceReady = true;
       state = state.copyWith(
         isLoadingStream: false,
+        isBuffering: false,
+        isPlaying: _wantsPlayback,
       );
+      // play() completes when playback ends, not when playback starts.
+      if (_wantsPlayback) _startPlayback(request);
     } catch (e) {
+      if (!_isCurrentLoad(request)) return;
       debugPrint('Error playing stream: $e');
       if (!isRetry) {
         // Otomatis invalidate cache dan coba sekali lagi dengan fresh stream extraction
         _ytRepo.invalidateCache(song.id);
-        return _loadAndPlayStream(song, isRetry: true);
+        return _loadAndPlayStream(song, isRetry: true, generation: request);
       }
       state = state.copyWith(
         isLoadingStream: false,
         isPlaying: false,
+        isBuffering: false,
         errorMessage: 'Terjadi kendala saat memutar lagu: $e',
       );
     }
   }
 
+  void _startPlayback(int generation) {
+    unawaited(
+      _player.play().catchError((Object error) {
+        if (!_isCurrentLoad(generation)) return;
+        _wantsPlayback = false;
+        _sourceReady = false;
+        state = state.copyWith(
+          isPlaying: false,
+          isBuffering: false,
+          isLoadingStream: false,
+          errorMessage: 'Kendala pemutaran: $error',
+        );
+      }),
+    );
+  }
+
   Future<void> togglePlayPause() async {
     if (state.currentSong == null) return;
-    if (_player.playing) {
-      await _player.pause();
+    if (state.isPlaying) {
+      await pause();
     } else {
-      await _player.play();
+      await play();
     }
+  }
+
+  Future<void> pause() async {
+    _wantsPlayback = false;
+    state = state.copyWith(isPlaying: false);
+    await _player.pause();
+  }
+
+  Future<void> play() async {
+    final song = state.currentSong;
+    if (song == null) return;
+    _wantsPlayback = true;
+    state = state.copyWith(isPlaying: true, clearError: true);
+    if (state.isLoadingStream) return;
+    if (!_sourceReady) {
+      await _loadAndPlayStream(song);
+      return;
+    }
+    if (_player.processingState == ProcessingState.completed) {
+      await _player.seek(Duration.zero);
+      if (!mounted || !_wantsPlayback) return;
+    }
+    _startPlayback(_loadGeneration);
   }
 
   Future<void> seek(Duration position) async {
@@ -324,11 +421,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
         shuffled.remove(current);
         shuffled.insert(0, current);
       }
-      state = state.copyWith(
-        isShuffle: true,
-        queue: shuffled,
-        currentIndex: 0,
-      );
+      state = state.copyWith(isShuffle: true, queue: shuffled, currentIndex: 0);
     } else {
       final current = state.currentSong;
       final restored = List<SongModel>.from(_originalQueue);
@@ -382,6 +475,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
 
   @override
   void dispose() {
+    _loadGeneration++;
     _playerStateSub?.cancel();
     _playbackEventSub?.cancel();
     _positionSub?.cancel();

@@ -5,19 +5,20 @@ class DeezerRepository {
   final Dio _dio;
 
   DeezerRepository({Dio? dio})
-      : _dio = dio ??
-            Dio(
-              BaseOptions(
-                baseUrl: 'https://api.deezer.com',
-                connectTimeout: const Duration(seconds: 10),
-                receiveTimeout: const Duration(seconds: 10),
-                headers: {
-                  'Accept': 'application/json',
-                  'User-Agent':
-                      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                },
-              ),
-            );
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              baseUrl: 'https://api.deezer.com',
+              connectTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 10),
+              headers: {
+                'Accept': 'application/json',
+                'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              },
+            ),
+          );
 
   /// Mengambil daftar lagu Top Charts terpopuler global
   Future<List<SongModel>> getTopCharts({int limit = 30}) async {
@@ -32,7 +33,9 @@ class DeezerRepository {
         final trackList = (tracksObj?['data'] as List<dynamic>?) ?? [];
 
         return trackList
-            .map((item) => SongModel.fromDeezerJson(item as Map<String, dynamic>))
+            .map(
+              (item) => SongModel.fromDeezerJson(item as Map<String, dynamic>),
+            )
             .toList();
       }
       return [];
@@ -50,10 +53,7 @@ class DeezerRepository {
     try {
       final response = await _dio.get(
         '/search',
-        queryParameters: {
-          'q': cleanQuery,
-          'limit': limit,
-        },
+        queryParameters: {'q': cleanQuery, 'limit': limit},
       );
 
       if (response.statusCode == 200 && response.data != null) {
@@ -61,7 +61,9 @@ class DeezerRepository {
         final trackList = (data['data'] as List<dynamic>?) ?? [];
 
         return trackList
-            .map((item) => SongModel.fromDeezerJson(item as Map<String, dynamic>))
+            .map(
+              (item) => SongModel.fromDeezerJson(item as Map<String, dynamic>),
+            )
             .toList();
       }
       return [];
@@ -71,7 +73,10 @@ class DeezerRepository {
   }
 
   /// Mengambil daftar lagu rekomendasi/populer berdasarkan artis
-  Future<List<SongModel>> getArtistTopTracks(String artistId, {int limit = 10}) async {
+  Future<List<SongModel>> getArtistTopTracks(
+    String artistId, {
+    int limit = 10,
+  }) async {
     try {
       final response = await _dio.get(
         '/artist/$artistId/top',
@@ -83,7 +88,9 @@ class DeezerRepository {
         final trackList = (data['data'] as List<dynamic>?) ?? [];
 
         return trackList
-            .map((item) => SongModel.fromDeezerJson(item as Map<String, dynamic>))
+            .map(
+              (item) => SongModel.fromDeezerJson(item as Map<String, dynamic>),
+            )
             .toList();
       }
       return [];

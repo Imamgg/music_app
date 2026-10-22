@@ -1,3 +1,7 @@
+import 'package:auno/core/localization/app_strings.dart';
+import 'playback_control_icon.dart';
+import 'package:flutter/services.dart';
+import 'glass_surface.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,10 +27,23 @@ class MiniPlayerWidget extends ConsumerWidget {
 
     final durationMs = playerState.duration.inMilliseconds;
     final positionMs = playerState.position.inMilliseconds;
-    final progress = (durationMs > 0 ? (positionMs / durationMs) : 0.0)
-        .clamp(0.0, 1.0);
+    final progress = (durationMs > 0 ? (positionMs / durationMs) : 0.0).clamp(
+      0.0,
+      1.0,
+    );
 
     return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity.abs() < 150) return;
+        HapticFeedback.lightImpact();
+        final player = ref.read(audioPlayerProvider.notifier);
+        if (velocity < 0) {
+          player.playNext();
+        } else {
+          player.playPrevious();
+        }
+      },
       onTap: () {
         Navigator.of(context).push(
           PageRouteBuilder(
@@ -34,45 +51,38 @@ class MiniPlayerWidget extends ConsumerWidget {
                 const NowPlayingScreen(),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
-              const begin = Offset(0.0, 1.0);
-              const end = Offset.zero;
-              const curve = Curves.easeOutCubic;
-              final tween =
-                  Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-              return SlideTransition(
-                position: animation.drive(tween),
-                child: child,
-              );
-            },
+                  const begin = Offset(0.0, 1.0);
+                  const end = Offset.zero;
+                  const curve = Curves.easeOutCubic;
+                  final tween = Tween(
+                    begin: begin,
+                    end: end,
+                  ).chain(CurveTween(curve: curve));
+                  return SlideTransition(
+                    position: animation.drive(tween),
+                    child: child,
+                  );
+                },
           ),
         );
       },
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.miniPlayerBg,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: GlassSurface(
+          radius: 99,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
                     // Artwork
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(99),
                       child: song.coverUrl.isNotEmpty
                           ? CachedNetworkImage(
                               imageUrl: song.coverUrl,
@@ -88,16 +98,22 @@ class MiniPlayerWidget extends ConsumerWidget {
                                 width: 44,
                                 height: 44,
                                 color: AppColors.surfaceLight,
-                                child: const Icon(Icons.music_note,
-                                    size: 20, color: AppColors.textMuted),
+                                child: const Icon(
+                                  Icons.music_note,
+                                  size: 20,
+                                  color: AppColors.textMuted,
+                                ),
                               ),
                             )
                           : Container(
                               width: 44,
                               height: 44,
                               color: AppColors.surfaceLight,
-                              child: const Icon(Icons.music_note,
-                                  size: 20, color: AppColors.textMuted),
+                              child: const Icon(
+                                Icons.music_note,
+                                size: 20,
+                                color: AppColors.textMuted,
+                              ),
                             ),
                     ),
                     const SizedBox(width: 12),
@@ -134,41 +150,42 @@ class MiniPlayerWidget extends ConsumerWidget {
 
                     // Like Button
                     IconButton(
+                      tooltip: context.tr(
+                        isLiked ? 'Hapus dari favorit' : 'Sukai lagu',
+                      ),
                       icon: Icon(
                         isLiked ? Icons.favorite : Icons.favorite_border,
                         color: isLiked ? AppColors.primary : Colors.white70,
                         size: 22,
                       ),
                       onPressed: () {
+                        HapticFeedback.lightImpact();
                         ref.read(libraryProvider.notifier).toggleLike(song);
                       },
                     ),
 
                     // Play/Pause Button
                     IconButton(
-                      icon: playerState.isLoadingStream || playerState.isBuffering
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : Icon(
-                              playerState.isPlaying
-                                  ? Icons.pause
-                                  : Icons.play_arrow,
-                              color: Colors.white,
-                              size: 28,
-                            ),
+                      tooltip: context.tr(
+                        playerState.isPlaying ? 'Jeda' : 'Putar',
+                      ),
+                      icon: PlaybackControlIcon(
+                        isPlaying: playerState.isPlaying,
+                        isBusy:
+                            playerState.isLoadingStream ||
+                            playerState.isBuffering,
+                      ),
                       onPressed: () {
-                        ref.read(audioPlayerProvider.notifier).togglePlayPause();
+                        HapticFeedback.lightImpact();
+                        ref
+                            .read(audioPlayerProvider.notifier)
+                            .togglePlayPause();
                       },
                     ),
 
                     // Next Button
                     IconButton(
+                      tooltip: context.tr('Lagu berikutnya'),
                       icon: const Icon(
                         Icons.skip_next,
                         color: Colors.white,
@@ -187,8 +204,9 @@ class MiniPlayerWidget extends ConsumerWidget {
                 value: progress,
                 minHeight: 2.5,
                 backgroundColor: Colors.white12,
-                valueColor:
-                    const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  AppColors.primary,
+                ),
               ),
             ],
           ),

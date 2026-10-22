@@ -2,6 +2,8 @@ import 'package:auno/core/utils/formatters.dart';
 import 'package:auno/data/models/lyric_line.dart';
 import 'package:auno/data/models/playlist_model.dart';
 import 'package:auno/data/models/song_model.dart';
+import 'package:auno/presentation/providers/settings_provider.dart';
+import 'package:auno/presentation/providers/sleep_timer_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -11,7 +13,9 @@ void main() {
       expect(Formatters.formatDuration(const Duration(seconds: 0)), '00:00');
       expect(Formatters.formatDuration(null), '00:00');
       expect(
-        Formatters.formatDuration(const Duration(hours: 1, minutes: 2, seconds: 3)),
+        Formatters.formatDuration(
+          const Duration(hours: 1, minutes: 2, seconds: 3),
+        ),
         '1:02:03',
       );
     });
@@ -32,7 +36,10 @@ void main() {
     });
 
     test('buildYouTubeSearchQuery builds clean search query', () {
-      final query = Formatters.buildYouTubeSearchQuery('Ed Sheeran', 'Bad Habits (Official Video)');
+      final query = Formatters.buildYouTubeSearchQuery(
+        'Ed Sheeran',
+        'Bad Habits (Official Video)',
+      );
       expect(query, 'Ed Sheeran Bad Habits Official Audio');
     });
   });
@@ -47,24 +54,48 @@ void main() {
       final parsed = LyricLine.parseLrc(lrc);
       expect(parsed.length, 3);
       expect(parsed[0].text, 'First line of lyrics');
-      expect(parsed[0].timestamp, const Duration(seconds: 5, milliseconds: 100));
-      expect(parsed[1].timestamp, const Duration(seconds: 12, milliseconds: 500));
+      expect(
+        parsed[0].timestamp,
+        const Duration(seconds: 5, milliseconds: 100),
+      );
+      expect(
+        parsed[1].timestamp,
+        const Duration(seconds: 12, milliseconds: 500),
+      );
       expect(parsed[2].timestamp, const Duration(seconds: 20));
     });
 
-    test('findActiveIndex finds the correct active line according to duration', () {
-      const lrc = '''
+    test(
+      'findActiveIndex finds the correct active line according to duration',
+      () {
+        const lrc = '''
 [00:05.00]Line 1
 [00:10.00]Line 2
 [00:15.00]Line 3
 ''';
-      final lyrics = LyricLine.parseLrc(lrc);
-      expect(LyricLine.findActiveIndex(lyrics, const Duration(seconds: 2)), 0);
-      expect(LyricLine.findActiveIndex(lyrics, const Duration(seconds: 7)), 0);
-      expect(LyricLine.findActiveIndex(lyrics, const Duration(seconds: 10)), 1);
-      expect(LyricLine.findActiveIndex(lyrics, const Duration(seconds: 12)), 1);
-      expect(LyricLine.findActiveIndex(lyrics, const Duration(seconds: 25)), 2);
-    });
+        final lyrics = LyricLine.parseLrc(lrc);
+        expect(
+          LyricLine.findActiveIndex(lyrics, const Duration(seconds: 2)),
+          -1,
+        );
+        expect(
+          LyricLine.findActiveIndex(lyrics, const Duration(seconds: 7)),
+          0,
+        );
+        expect(
+          LyricLine.findActiveIndex(lyrics, const Duration(seconds: 10)),
+          1,
+        );
+        expect(
+          LyricLine.findActiveIndex(lyrics, const Duration(seconds: 12)),
+          1,
+        );
+        expect(
+          LyricLine.findActiveIndex(lyrics, const Duration(seconds: 25)),
+          2,
+        );
+      },
+    );
   });
 
   group('SongModel & PlaylistModel Tests', () {
@@ -73,7 +104,10 @@ void main() {
         'id': 12345,
         'title': 'Starboy',
         'duration': 230,
-        'artist': {'name': 'The Weeknd', 'picture_medium': 'https://example.com/artist.jpg'},
+        'artist': {
+          'name': 'The Weeknd',
+          'picture_medium': 'https://example.com/artist.jpg',
+        },
         'album': {
           'title': 'Starboy Album',
           'cover_medium': 'https://example.com/cover.jpg',
@@ -137,6 +171,55 @@ void main() {
       expect(revived.id, 'p1');
       expect(revived.title, 'My Chill Mix');
       expect(revived.songs.length, 1);
+    });
+  });
+
+  group('Settings & Sleep Timer Tests', () {
+    test('AudioQuality handles keys and default fallback', () {
+      expect(AudioQuality.fromString('high'), AudioQuality.high);
+      expect(AudioQuality.fromString('low'), AudioQuality.low);
+      expect(AudioQuality.fromString('normal'), AudioQuality.normal);
+      expect(AudioQuality.fromString('invalid'), AudioQuality.normal);
+      expect(AudioQuality.high.key, 'high');
+      expect(AudioQuality.normal.key, 'normal');
+      expect(AudioQuality.low.key, 'low');
+    });
+
+    test('LyricsFontSize maps sizes accurately', () {
+      expect(LyricsFontSize.fromString('small'), LyricsFontSize.small);
+      expect(LyricsFontSize.fromString('large'), LyricsFontSize.large);
+      expect(LyricsFontSize.fromString('medium'), LyricsFontSize.medium);
+      expect(LyricsFontSize.fromString('unknown'), LyricsFontSize.medium);
+      expect(LyricsFontSize.small.baseSize, 15.0);
+      expect(LyricsFontSize.medium.baseSize, 18.0);
+      expect(LyricsFontSize.large.baseSize, 22.0);
+    });
+
+    test('SleepTimerState formattedRemaining displays minutes and seconds', () {
+      const stateOff = SleepTimerState();
+      expect(stateOff.isActive, false);
+      expect(stateOff.formattedRemaining, 'Nonaktif');
+
+      const stateDuration = SleepTimerState(
+        mode: SleepTimerMode.duration,
+        remainingSeconds: 905, // 15m 5s
+        totalSeconds: 905,
+      );
+      expect(stateDuration.isActive, true);
+      expect(stateDuration.formattedRemaining, '15:05');
+
+      const stateEndOfTrack = SleepTimerState(mode: SleepTimerMode.endOfTrack);
+      expect(stateEndOfTrack.isActive, true);
+      expect(stateEndOfTrack.formattedRemaining, 'Di akhir lagu ini');
+    });
+
+    test('ContentLanguage fromCode maps properly with fallback to system', () {
+      expect(ContentLanguage.fromCode('id'), ContentLanguage.indonesian);
+      expect(ContentLanguage.fromCode('en'), ContentLanguage.english);
+      expect(ContentLanguage.fromCode('ja'), ContentLanguage.japanese);
+      expect(ContentLanguage.fromCode('ko'), ContentLanguage.korean);
+      expect(ContentLanguage.fromCode('system'), ContentLanguage.system);
+      expect(ContentLanguage.fromCode('nonexistent'), ContentLanguage.system);
     });
   });
 }

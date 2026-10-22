@@ -7,9 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('AunoApp smoke test - mounts successfully', (WidgetTester tester) async {
+  testWidgets('AunoApp smoke test - mounts successfully', (
+    WidgetTester tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     final storageRepo = await StorageRepository.create();
+    await storageRepo.setContentLanguage('id');
     await storageRepo.cacheCharts([
       const SongModel(
         id: '1',
@@ -24,9 +27,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          storageRepoProvider.overrideWithValue(storageRepo),
-        ],
+        overrides: [storageRepoProvider.overrideWithValue(storageRepo)],
         child: const AunoApp(),
       ),
     );

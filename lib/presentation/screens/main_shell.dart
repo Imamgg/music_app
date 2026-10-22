@@ -1,3 +1,5 @@
+import 'package:auno/core/localization/app_strings.dart';
+import '../widgets/glass_surface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_colors.dart';
@@ -29,7 +31,7 @@ class _MainShellState extends ConsumerState<MainShell> {
       if (next != null && next.isNotEmpty && next != prev) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(next),
+            content: AppText(next),
             backgroundColor: AppColors.error,
             duration: const Duration(seconds: 4),
           ),
@@ -41,51 +43,57 @@ class _MainShellState extends ConsumerState<MainShell> {
     final hasSong = playerState.hasCurrentSong;
 
     return Scaffold(
-      body: Stack(
+      body: Column(
         children: [
-          // Screen content
-          IndexedStack(
-            index: _currentIndex,
-            children: _screens,
+          Expanded(
+            child: IndexedStack(index: _currentIndex, children: _screens),
           ),
-
-          // Pinned Mini Player
-          if (hasSong)
-            const Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: MiniPlayerWidget(),
-            ),
+          if (hasSong) const MiniPlayerWidget(),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        backgroundColor: AppColors.background,
-        selectedItemColor: AppColors.textPrimary,
-        unselectedItemColor: AppColors.textMuted,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_filled),
-            activeIcon: Icon(Icons.home_filled, color: AppColors.textPrimary),
-            label: 'Beranda',
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: GlassSurface(
+            radius: 24,
+            child: BottomNavigationBar(
+              elevation: 0,
+              currentIndex: _currentIndex,
+              onTap: (index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              },
+              backgroundColor: Colors.transparent,
+              selectedItemColor: AppColors.textPrimary,
+              unselectedItemColor: AppColors.textMuted,
+              items: [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.home_filled),
+                  activeIcon: Icon(
+                    Icons.home_filled,
+                    color: AppColors.textPrimary,
+                  ),
+                  label: context.tr('Beranda'),
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.search),
+                  activeIcon: Icon(Icons.search, color: AppColors.textPrimary),
+                  label: context.tr('Cari'),
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.library_music_outlined),
+                  activeIcon: Icon(
+                    Icons.library_music,
+                    color: AppColors.textPrimary,
+                  ),
+                  label: context.tr('Koleksi Kamu'),
+                ),
+              ],
+            ),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            activeIcon: Icon(Icons.search, color: AppColors.textPrimary),
-            label: 'Cari',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.library_music_outlined),
-            activeIcon: Icon(Icons.library_music, color: AppColors.textPrimary),
-            label: 'Koleksi Kamu',
-          ),
-        ],
+        ),
       ),
     );
   }

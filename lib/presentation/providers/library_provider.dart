@@ -1,20 +1,20 @@
+import 'package:uuid/uuid.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/playlist_model.dart';
 import '../../data/models/song_model.dart';
 import '../../data/repositories/storage_repository.dart';
 
 final storageRepoProvider = Provider<StorageRepository>((ref) {
-  throw UnimplementedError('StorageRepository must be overridden in ProviderScope');
+  throw UnimplementedError(
+    'StorageRepository must be overridden in ProviderScope',
+  );
 });
 
 class LibraryState {
   final List<SongModel> likedSongs;
   final List<PlaylistModel> playlists;
 
-  const LibraryState({
-    this.likedSongs = const [],
-    this.playlists = const [],
-  });
+  const LibraryState({this.likedSongs = const [], this.playlists = const []});
 
   bool isLiked(String songId) => likedSongs.any((s) => s.id == songId);
 
@@ -29,8 +29,9 @@ class LibraryState {
   }
 }
 
-final libraryProvider =
-    StateNotifierProvider<LibraryNotifier, LibraryState>((ref) {
+final libraryProvider = StateNotifierProvider<LibraryNotifier, LibraryState>((
+  ref,
+) {
   final storage = ref.watch(storageRepoProvider);
   return LibraryNotifier(storage);
 });
@@ -46,28 +47,30 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
     final liked = _storage.getLikedSongs();
     final playlists = _storage.getPlaylists();
 
-    state = state.copyWith(
-      likedSongs: liked,
-      playlists: playlists,
-    );
+    state = state.copyWith(likedSongs: liked, playlists: playlists);
   }
 
   Future<void> toggleLike(SongModel song) async {
     await _storage.toggleLike(song);
-    state = state.copyWith(
-      likedSongs: _storage.getLikedSongs(),
-    );
+    state = state.copyWith(likedSongs: _storage.getLikedSongs());
   }
 
-  Future<void> createPlaylist(String title, {String description = ''}) async {
+  Future<PlaylistModel> createPlaylist(
+    String title, {
+    String description = '',
+    SongModel? initialSong,
+  }) async {
+    if (title.trim().isEmpty) throw ArgumentError('Nama playlist wajib diisi');
     final newPlaylist = PlaylistModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: title,
+      id: const Uuid().v4(),
+      title: title.trim(),
+      songs: initialSong == null ? const [] : [initialSong],
       description: description,
       createdAt: DateTime.now(),
     );
     await _storage.savePlaylist(newPlaylist);
     state = state.copyWith(playlists: _storage.getPlaylists());
+    return newPlaylist;
   }
 
   Future<void> addSongToPlaylist(String playlistId, SongModel song) async {

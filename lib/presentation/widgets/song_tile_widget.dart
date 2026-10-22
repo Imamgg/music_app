@@ -1,3 +1,6 @@
+import 'package:auno/core/localization/app_strings.dart';
+import 'song_actions_sheet.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,20 +49,29 @@ class SongTileWidget extends ConsumerWidget {
                       width: 50,
                       height: 50,
                       color: AppColors.surfaceLight,
-                      child: const Icon(Icons.music_note, color: AppColors.textMuted),
+                      child: const Icon(
+                        Icons.music_note,
+                        color: AppColors.textMuted,
+                      ),
                     ),
                     errorWidget: (context, url, error) => Container(
                       width: 50,
                       height: 50,
                       color: AppColors.surfaceLight,
-                      child: const Icon(Icons.music_note, color: AppColors.textMuted),
+                      child: const Icon(
+                        Icons.music_note,
+                        color: AppColors.textMuted,
+                      ),
                     ),
                   )
                 : Container(
                     width: 50,
                     height: 50,
                     color: AppColors.surfaceLight,
-                    child: const Icon(Icons.music_note, color: AppColors.textMuted),
+                    child: const Icon(
+                      Icons.music_note,
+                      color: AppColors.textMuted,
+                    ),
                   ),
           ),
           if (isCurrent)
@@ -105,10 +117,7 @@ class SongTileWidget extends ConsumerWidget {
             const SizedBox(width: 8),
             Text(
               Formatters.formatSeconds(song.durationSeconds),
-              style: const TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 12,
-              ),
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
             ),
           ],
         ],
@@ -123,46 +132,34 @@ class SongTileWidget extends ConsumerWidget {
               size: 20,
             ),
             onPressed: () {
+              HapticFeedback.lightImpact();
               ref.read(libraryProvider.notifier).toggleLike(song);
             },
           ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: AppColors.textMuted, size: 20),
-            color: AppColors.surfaceLight,
-            onSelected: (value) {
-              if (value == 'queue') {
+          IconButton(
+            tooltip: context.tr('Opsi lagu'),
+            icon: const Icon(Icons.more_vert),
+            onPressed: () => showSongActions(
+              context,
+              song,
+              onAddToQueue: () {
                 ref.read(audioPlayerProvider.notifier).addToQueue(song);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Ditambahkan ke antrean: ${song.title}'),
-                    duration: const Duration(seconds: 2),
+                    content: AppText('Ditambahkan ke antrean: ${song.title}'),
                   ),
                 );
-              } else if (value == 'play_next') {
-                ref.read(audioPlayerProvider.notifier).addToQueue(song);
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'queue',
-                child: Row(
-                  children: [
-                    Icon(Icons.queue_music, color: AppColors.textPrimary, size: 20),
-                    SizedBox(width: 12),
-                    Text('Tambah ke Antrean', style: TextStyle(color: AppColors.textPrimary)),
-                  ],
-                ),
-              ),
-            ],
+              },
+            ),
           ),
         ],
       ),
-      onTap: onTap ??
+      onTap:
+          onTap ??
           () {
-            ref.read(audioPlayerProvider.notifier).playSong(
-                  song,
-                  queue: playlistContext,
-                );
+            ref
+                .read(audioPlayerProvider.notifier)
+                .playSong(song, queue: playlistContext);
           },
     );
   }

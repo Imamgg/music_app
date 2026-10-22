@@ -2,10 +2,7 @@ class LyricLine {
   final Duration timestamp;
   final String text;
 
-  const LyricLine({
-    required this.timestamp,
-    required this.text,
-  });
+  const LyricLine({required this.timestamp, required this.text});
 
   /// Mengonversi teks format .LRC (Time-synced lyrics) menjadi daftar [LyricLine]
   static List<LyricLine> parseLrc(String lrcContent) {
@@ -26,7 +23,9 @@ class LyricLine {
 
         int milliseconds = 0;
         if (millisGroup != null) {
-          if (millisGroup.length == 2) {
+          if (millisGroup.length == 1) {
+            milliseconds = (int.tryParse(millisGroup) ?? 0) * 100;
+          } else if (millisGroup.length == 2) {
             milliseconds = (int.tryParse(millisGroup) ?? 0) * 10;
           } else {
             milliseconds = int.tryParse(millisGroup) ?? 0;
@@ -59,6 +58,6 @@ class LyricLine {
         return i;
       }
     }
-    return 0;
+    return -1;
   }
 }

@@ -1,3 +1,7 @@
+import 'presentation/widgets/liquid_aurora.dart';
+import 'presentation/providers/settings_provider.dart';
+import 'core/localization/app_strings.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,23 +41,34 @@ Future<void> main() async {
 
   runApp(
     ProviderScope(
-      overrides: [
-        storageRepoProvider.overrideWithValue(storageRepo),
-      ],
+      overrides: [storageRepoProvider.overrideWithValue(storageRepo)],
       child: const AunoApp(),
     ),
   );
 }
 
-class AunoApp extends StatelessWidget {
+class AunoApp extends ConsumerWidget {
   const AunoApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final language = ref.watch(
+      settingsProvider.select((s) => s.contentLanguage),
+    );
     return MaterialApp(
       title: 'AUNO',
+      locale: language == ContentLanguage.system ? null : Locale(language.code),
+      supportedLocales: AppStrings.supportedLocales,
+      localizationsDelegates: const [
+        AppStrings.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
+      builder: (context, child) =>
+          Stack(fit: StackFit.expand, children: [const LiquidAurora(), child!]),
       home: const MainShell(),
     );
   }

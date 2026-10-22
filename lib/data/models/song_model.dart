@@ -1,3 +1,15 @@
+class ArtistCredit {
+  const ArtistCredit({required this.name, required this.browseId});
+  final String name;
+  final String browseId;
+
+  Map<String, dynamic> toJson() => {'name': name, 'browse_id': browseId};
+  factory ArtistCredit.fromJson(Map<String, dynamic> json) => ArtistCredit(
+    name: json['name']?.toString() ?? '',
+    browseId: json['browse_id']?.toString() ?? '',
+  );
+}
+
 class SongModel {
   final String id;
   final String title;
@@ -8,6 +20,9 @@ class SongModel {
   final int durationSeconds;
   final String? youtubeVideoId;
   final String? streamUrl;
+  final String? artistBrowseId;
+  final String? albumBrowseId;
+  final List<ArtistCredit> artists;
   final bool isLiked;
 
   const SongModel({
@@ -20,6 +35,9 @@ class SongModel {
     required this.durationSeconds,
     this.youtubeVideoId,
     this.streamUrl,
+    this.artistBrowseId,
+    this.albumBrowseId,
+    this.artists = const [],
     this.isLiked = false,
   });
 
@@ -28,11 +46,13 @@ class SongModel {
     final artistObj = json['artist'] as Map<String, dynamic>? ?? {};
     final albumObj = json['album'] as Map<String, dynamic>? ?? {};
 
-    final coverSmall = albumObj['cover_medium'] ??
+    final coverSmall =
+        albumObj['cover_medium'] ??
         albumObj['cover'] ??
         artistObj['picture_medium'] ??
         '';
-    final coverBig = albumObj['cover_xl'] ??
+    final coverBig =
+        albumObj['cover_xl'] ??
         albumObj['cover_big'] ??
         artistObj['picture_xl'] ??
         coverSmall;
@@ -56,12 +76,19 @@ class SongModel {
       artist: json['artist']?.toString() ?? '',
       album: json['album']?.toString() ?? '',
       coverUrl: json['cover_url']?.toString() ?? '',
-      highResCoverUrl: json['high_res_cover_url']?.toString() ??
+      highResCoverUrl:
+          json['high_res_cover_url']?.toString() ??
           json['cover_url']?.toString() ??
           '',
       durationSeconds: (json['duration_seconds'] as num?)?.toInt() ?? 0,
       youtubeVideoId: json['youtube_video_id']?.toString(),
       streamUrl: json['stream_url']?.toString(),
+      artistBrowseId: json['artist_browse_id']?.toString(),
+      albumBrowseId: json['album_browse_id']?.toString(),
+      artists: (json['artists'] as List? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(ArtistCredit.fromJson)
+          .toList(),
       isLiked: json['is_liked'] == true,
     );
   }
@@ -77,6 +104,9 @@ class SongModel {
       'duration_seconds': durationSeconds,
       'youtube_video_id': youtubeVideoId,
       'is_liked': isLiked,
+      'artist_browse_id': artistBrowseId,
+      'album_browse_id': albumBrowseId,
+      'artists': artists.map((artist) => artist.toJson()).toList(),
     };
   }
 
@@ -90,6 +120,9 @@ class SongModel {
     int? durationSeconds,
     String? youtubeVideoId,
     String? streamUrl,
+    String? artistBrowseId,
+    String? albumBrowseId,
+    List<ArtistCredit>? artists,
     bool? isLiked,
   }) {
     return SongModel(
@@ -102,6 +135,9 @@ class SongModel {
       durationSeconds: durationSeconds ?? this.durationSeconds,
       youtubeVideoId: youtubeVideoId ?? this.youtubeVideoId,
       streamUrl: streamUrl ?? this.streamUrl,
+      artistBrowseId: artistBrowseId ?? this.artistBrowseId,
+      albumBrowseId: albumBrowseId ?? this.albumBrowseId,
+      artists: artists ?? this.artists,
       isLiked: isLiked ?? this.isLiked,
     );
   }

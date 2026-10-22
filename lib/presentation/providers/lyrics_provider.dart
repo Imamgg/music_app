@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/lyric_line.dart';
+import '../../data/models/song_model.dart';
 import '../../data/repositories/lyrics_repository.dart';
 import 'audio_player_provider.dart';
 
@@ -39,16 +40,15 @@ class LyricsState {
   }
 }
 
-final lyricsProvider =
-    StateNotifierProvider<LyricsNotifier, LyricsState>((ref) {
+final lyricsProvider = StateNotifierProvider<LyricsNotifier, LyricsState>((
+  ref,
+) {
   final lyricsRepo = ref.watch(lyricsRepositoryProvider);
   final notifier = LyricsNotifier(lyricsRepo);
 
   // Perbarui lirik saat lagu berganti
   ref.listen(audioPlayerProvider.select((s) => s.currentSong), (prev, next) {
-    if (next != null && next.id != prev?.id) {
-      notifier.loadLyricsForSong(next);
-    }
+    if (next?.id != prev?.id) notifier.loadLyricsForSong(next);
   });
 
   // Perbarui baris aktif saat posisi lagu berjalan
@@ -56,6 +56,8 @@ final lyricsProvider =
     notifier.updateActivePosition(pos);
   });
 
+  notifier.updateActivePosition(ref.read(audioPlayerProvider).position);
+  notifier.loadLyricsForSong(ref.read(audioPlayerProvider).currentSong);
   return notifier;
 });
 
@@ -64,23 +66,29 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
 
   LyricsNotifier(this._repo) : super(const LyricsState());
 
-  Future<void> loadLyricsForSong(dynamic song) async {
-    state = state.copyWith(isLoading: true, lines: [], plainLyrics: null, activeIndex: -1);
+  int _generation = 0;
+  Duration _position = Duration.zero;
+
+  Future<void> loadLyricsForSong(SongModel? song) async {
+    final generation = ++_generation;
+    state = LyricsState(isLoading: song != null);
+    if (song == null) return;
     try {
       final result = await _repo.getLyrics(song);
-      state = state.copyWith(
+      if (!mounted || generation != _generation) return;
+      state = LyricsState(
         lines: result.syncedLyrics,
         plainLyrics: result.plainLyrics,
         hasSyncedLyrics: result.hasSyncedLyrics,
-        isLoading: false,
-        activeIndex: result.syncedLyrics.isNotEmpty ? 0 : -1,
+        activeIndex: LyricLine.findActiveIndex(result.syncedLyrics, _position),
       );
     } catch (_) {
-      state = state.copyWith(isLoading: false);
+      if (mounted && generation == _generation) state = const LyricsState();
     }
   }
 
   void updateActivePosition(Duration position) {
+    _position = position;
     if (state.lines.isEmpty) return;
     final index = LyricLine.findActiveIndex(state.lines, position);
     if (index != state.activeIndex) {

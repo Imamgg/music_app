@@ -1,3 +1,4 @@
+import 'package:auno/core/localization/app_strings.dart';
 import 'package:auno/core/constants/app_colors.dart';
 import 'package:auno/presentation/providers/audio_player_provider.dart';
 import 'package:auno/presentation/widgets/song_tile_widget.dart';
@@ -14,13 +15,11 @@ class QueueScreen extends ConsumerWidget {
     final queue = playerState.queue;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Antrean Pemutaran'),
-      ),
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(title: const AppText('Antrean Pemutaran')),
       body: queue.isEmpty && currentSong == null
           ? const Center(
-              child: Text(
+              child: AppText(
                 'Antrean masih kosong',
                 style: TextStyle(color: AppColors.textMuted),
               ),
@@ -30,9 +29,11 @@ class QueueScreen extends ConsumerWidget {
                 if (currentSong != null) ...[
                   const SliverToBoxAdapter(
                     child: Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Text(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      child: AppText(
                         'Sedang Diputar',
                         style: TextStyle(
                           color: AppColors.textPrimary,
@@ -42,18 +43,15 @@ class QueueScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  SliverToBoxAdapter(
-                    child: SongTileWidget(song: currentSong),
-                  ),
+                  SliverToBoxAdapter(child: SongTileWidget(song: currentSong)),
                   const SliverToBoxAdapter(
                     child: Divider(color: AppColors.divider, height: 24),
                   ),
                 ],
                 const SliverToBoxAdapter(
                   child: Padding(
-                    padding:
-                        EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Text(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: AppText(
                       'Berikutnya dalam Antrean',
                       style: TextStyle(
                         color: AppColors.textPrimary,
@@ -119,8 +117,11 @@ class QueueScreen extends ConsumerWidget {
                           ),
                         ),
                         trailing: IconButton(
-                          icon: const Icon(Icons.close,
-                              color: AppColors.textMuted, size: 18),
+                          icon: const Icon(
+                            Icons.close,
+                            color: AppColors.textMuted,
+                            size: 18,
+                          ),
                           onPressed: () {
                             ref
                                 .read(audioPlayerProvider.notifier)

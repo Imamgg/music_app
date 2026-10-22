@@ -1,3 +1,4 @@
+import 'package:auno/core/localization/app_strings.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,10 +12,7 @@ import '../../widgets/song_tile_widget.dart';
 class PlaylistDetailScreen extends ConsumerWidget {
   final PlaylistModel playlist;
 
-  const PlaylistDetailScreen({
-    super.key,
-    required this.playlist,
-  });
+  const PlaylistDetailScreen({super.key, required this.playlist});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -23,7 +21,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
     final tracks = detailState.tracks;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           CustomScrollView(
@@ -32,7 +30,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
               SliverAppBar(
                 expandedHeight: 280,
                 pinned: true,
-                backgroundColor: AppColors.background,
+                backgroundColor: Colors.transparent,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back, color: Colors.white),
                   onPressed: () => Navigator.of(context).pop(),
@@ -65,7 +63,8 @@ class PlaylistDetailScreen extends ConsumerWidget {
                             // Cover Art
                             ClipRRect(
                               borderRadius: BorderRadius.circular(12),
-                              child: playlist.coverUrl != null &&
+                              child:
+                                  playlist.coverUrl != null &&
                                       playlist.coverUrl!.isNotEmpty
                                   ? CachedNetworkImage(
                                       imageUrl: playlist.coverUrl!,
@@ -79,26 +78,33 @@ class PlaylistDetailScreen extends ConsumerWidget {
                                       ),
                                       errorWidget: (context, url, error) =>
                                           Container(
-                                        width: 140,
-                                        height: 140,
-                                        color: AppColors.surfaceLight,
-                                        child: const Icon(Icons.music_note,
-                                            size: 48,
-                                            color: AppColors.textMuted),
-                                      ),
+                                            width: 140,
+                                            height: 140,
+                                            color: AppColors.surfaceLight,
+                                            child: const Icon(
+                                              Icons.music_note,
+                                              size: 48,
+                                              color: AppColors.textMuted,
+                                            ),
+                                          ),
                                     )
                                   : Container(
                                       width: 140,
                                       height: 140,
                                       color: AppColors.surfaceLight,
-                                      child: const Icon(Icons.queue_music,
-                                          size: 48, color: AppColors.textMuted),
+                                      child: const Icon(
+                                        Icons.queue_music,
+                                        size: 48,
+                                        color: AppColors.textMuted,
+                                      ),
                                     ),
                             ),
                             const SizedBox(height: 14),
                             // Title
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
                               child: Text(
                                 playlist.title,
                                 textAlign: TextAlign.center,
@@ -114,7 +120,9 @@ class PlaylistDetailScreen extends ConsumerWidget {
                             const SizedBox(height: 4),
                             // Description / Track Count
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
                               child: Text(
                                 playlist.description.isNotEmpty
                                     ? playlist.description
@@ -140,14 +148,20 @@ class PlaylistDetailScreen extends ConsumerWidget {
               if (tracks.isNotEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: Row(
                       children: [
                         // Play All Button
                         Expanded(
                           child: ElevatedButton.icon(
-                            icon: const Icon(Icons.play_arrow, color: Colors.black),
-                            label: const Text(
+                            icon: const Icon(
+                              Icons.play_arrow,
+                              color: Colors.black,
+                            ),
+                            label: const AppText(
                               'Putar Semua',
                               style: TextStyle(
                                 color: Colors.black,
@@ -162,7 +176,10 @@ class PlaylistDetailScreen extends ConsumerWidget {
                               ),
                             ),
                             onPressed: () {
-                              playerNotifier.playSong(tracks.first, queue: tracks);
+                              playerNotifier.playSong(
+                                tracks.first,
+                                queue: tracks,
+                              );
                             },
                           ),
                         ),
@@ -170,20 +187,28 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         // Shuffle Button
                         OutlinedButton.icon(
                           icon: const Icon(Icons.shuffle, color: Colors.white),
-                          label: const Text(
+                          label: const AppText(
                             'Acak',
                             style: TextStyle(color: Colors.white),
                           ),
                           style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            side: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.3),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(24),
                             ),
                           ),
                           onPressed: () {
                             final shuffled = List.of(tracks)..shuffle();
-                            playerNotifier.playSong(shuffled.first, queue: shuffled);
+                            playerNotifier.playSong(
+                              shuffled.first,
+                              queue: shuffled,
+                            );
                           },
                         ),
                       ],
@@ -204,8 +229,11 @@ class PlaylistDetailScreen extends ConsumerWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline,
-                            color: Colors.white54, size: 48),
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.white54,
+                          size: 48,
+                        ),
                         const SizedBox(height: 12),
                         Text(
                           detailState.errorMessage!,
@@ -219,7 +247,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                                 .read(playlistDetailProvider(playlist).notifier)
                                 .refresh();
                           },
-                          child: const Text('Coba Lagi'),
+                          child: const AppText('Coba Lagi'),
                         ),
                       ],
                     ),
@@ -227,23 +255,18 @@ class PlaylistDetailScreen extends ConsumerWidget {
                 )
               else
                 SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final song = tracks[index];
-                      return SongTileWidget(
-                        song: song,
-                        playlistContext: tracks,
-                        index: index,
-                      );
-                    },
-                    childCount: tracks.length,
-                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final song = tracks[index];
+                    return SongTileWidget(
+                      song: song,
+                      playlistContext: tracks,
+                      index: index,
+                    );
+                  }, childCount: tracks.length),
                 ),
 
               // Bottom spacing for MiniPlayer
-              const SliverToBoxAdapter(
-                child: SizedBox(height: 90),
-              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 90)),
             ],
           ),
 

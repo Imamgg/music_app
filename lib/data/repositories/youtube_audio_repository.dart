@@ -17,6 +17,17 @@ class AudioStreamResult {
 class YoutubeAudioRepository {
   YoutubeExplode _yt;
   final Map<String, AudioStreamResult> _cache = {};
+  String quality = 'normal';
+
+  static int selectBitrate(List<int> rates, String quality) {
+    if (rates.isEmpty) throw ArgumentError('No audio streams');
+    final sorted = [...rates]..sort();
+    if (quality == 'high') return sorted.last;
+    final target = quality == 'low' ? 64000 : 128000;
+    return sorted.reduce(
+      (a, b) => (a - target).abs() <= (b - target).abs() ? a : b,
+    );
+  }
 
   YoutubeAudioRepository({YoutubeExplode? yt}) : _yt = yt ?? YoutubeExplode();
 
@@ -26,23 +37,31 @@ class YoutubeAudioRepository {
     SongModel song, {
     bool forceRefresh = false,
   }) async {
+    final selectedQuality = quality;
+    final cacheKey = '${song.id}|$selectedQuality';
     // 1. Cek cache memori terlebih dahulu
-    if (!forceRefresh && _cache.containsKey(song.id)) {
-      return _cache[song.id];
+    if (!forceRefresh && _cache.containsKey(cacheKey)) {
+      return _cache[cacheKey];
     }
     if (forceRefresh) {
-      _cache.remove(song.id);
+      _cache.remove(cacheKey);
     }
 
     try {
       // 2. Jika sudah memiliki videoId spesifik, ambil manifest langsung
       if (song.youtubeVideoId != null && song.youtubeVideoId!.isNotEmpty) {
-        final directResult = await _extractBestAudio(song.youtubeVideoId!);
+        final directResult = await _extractBestAudio(
+          song.youtubeVideoId!,
+          selectedQuality,
+          compatibility: forceRefresh,
+        );
         if (directResult != null) {
-          _cache[song.id] = directResult;
+          _cache[cacheKey] = directResult;
           return directResult;
         }
       }
+
+      if (song.youtubeVideoId?.isNotEmpty == true) return null;
 
       // 3. Cari di YouTube
       // Utamakan kueri natural "$artist $cleanTitle", lalu fallback dengan "Official Audio"
@@ -71,7 +90,8 @@ class YoutubeAudioRepository {
         final titleLower = video.title.toLowerCase();
 
         // A. Abaikan video kompilasi / full album
-        final isAlbumOrCompilation = titleLower.contains('full album') ||
+        final isAlbumOrCompilation =
+            titleLower.contains('full album') ||
             titleLower.contains('kompilasi') ||
             titleLower.contains('kumpulan') ||
             titleLower.contains('playlist') ||
@@ -124,9 +144,13 @@ class YoutubeAudioRepository {
           : searchResults.take(3).toList();
 
       for (final video in candidatesToTry) {
-        final result = await _extractBestAudio(video.id.value);
+        final result = await _extractBestAudio(
+          video.id.value,
+          selectedQuality,
+          compatibility: forceRefresh,
+        );
         if (result != null) {
-          _cache[song.id] = result;
+          _cache[cacheKey] = result;
           return result;
         }
       }
@@ -154,9 +178,28 @@ class YoutubeAudioRepository {
     }
   }
 
-  Future<AudioStreamResult?> _extractBestAudio(String videoId) async {
+  Future<AudioStreamResult?> _extractBestAudio(
+    String videoId,
+    String selectedQuality, {
+    bool compatibility = false,
+  }) async {
     try {
       final manifest = await _yt.videos.streamsClient.getManifest(videoId);
+
+      final audioOnly = manifest.audioOnly.toList();
+      if (audioOnly.isNotEmpty && !compatibility) {
+        final rate = selectBitrate(
+          audioOnly.map((s) => s.bitrate.bitsPerSecond).toList(),
+          selectedQuality,
+        );
+        final selected = audioOnly.firstWhere(
+          (s) => s.bitrate.bitsPerSecond == rate,
+        );
+        return AudioStreamResult(
+          streamUrl: selected.url.toString(),
+          videoId: videoId,
+        );
+      }
 
       // 1. Prioritas Utama: Progressive MP4 streams dengan ratebypass=yes (misalnya itag 18 atau 22).
       // Format ini didukung 100% oleh hardware decoder Android ExoPlayer tanpa kendala HTTP 403 Forbidden,
@@ -179,9 +222,9 @@ class YoutubeAudioRepository {
       }
 
       // 2. Prioritas Kedua: Seluruh muxed MP4 yang tersedia
-      final anyMuxed = manifest.muxed.where(
-        (s) => s.container.name.toLowerCase() == 'mp4',
-      ).toList();
+      final anyMuxed = manifest.muxed
+          .where((s) => s.container.name.toLowerCase() == 'mp4')
+          .toList();
       if (anyMuxed.isNotEmpty) {
         return AudioStreamResult(
           streamUrl: anyMuxed.first.url.toString(),
@@ -215,7 +258,7 @@ class YoutubeAudioRepository {
   }
 
   void invalidateCache(String songId) {
-    _cache.remove(songId);
+    _cache.removeWhere((key, _) => key.startsWith('$songId|'));
   }
 
   void dispose() {

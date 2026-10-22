@@ -1,3 +1,5 @@
+import 'package:auno/core/localization/app_strings.dart';
+import '../../widgets/glass_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
@@ -5,6 +7,7 @@ import '../../../data/models/playlist_model.dart';
 import '../../providers/audio_player_provider.dart';
 import '../../providers/library_provider.dart';
 import '../../widgets/song_tile_widget.dart';
+import '../settings/settings_screen.dart';
 
 class LibraryScreen extends ConsumerWidget {
   const LibraryScreen({super.key});
@@ -15,10 +18,11 @@ class LibraryScreen extends ConsumerWidget {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surfaceLight,
-        title: const Text('Buat Playlist Baru',
-            style: TextStyle(color: AppColors.textPrimary)),
+      builder: (context) => GlassDialog(
+        title: const AppText(
+          'Buat Playlist Baru',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -26,8 +30,8 @@ class LibraryScreen extends ConsumerWidget {
               controller: titleController,
               autofocus: true,
               style: const TextStyle(color: AppColors.textPrimary),
-              decoration: const InputDecoration(
-                hintText: 'Nama Playlist',
+              decoration: InputDecoration(
+                hintText: context.tr('Nama Playlist'),
                 hintStyle: TextStyle(color: AppColors.textMuted),
                 enabledBorder: UnderlineInputBorder(
                   borderSide: BorderSide(color: AppColors.divider),
@@ -41,8 +45,8 @@ class LibraryScreen extends ConsumerWidget {
             TextField(
               controller: descController,
               style: const TextStyle(color: AppColors.textPrimary),
-              decoration: const InputDecoration(
-                hintText: 'Deskripsi (opsional)',
+              decoration: InputDecoration(
+                hintText: context.tr('Deskripsi (opsional)'),
                 hintStyle: TextStyle(color: AppColors.textMuted),
                 enabledBorder: UnderlineInputBorder(
                   borderSide: BorderSide(color: AppColors.divider),
@@ -57,8 +61,10 @@ class LibraryScreen extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Batal',
-                style: TextStyle(color: AppColors.textSecondary)),
+            child: const AppText(
+              'Batal',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -70,11 +76,14 @@ class LibraryScreen extends ConsumerWidget {
               if (title.isNotEmpty) {
                 ref
                     .read(libraryProvider.notifier)
-                    .createPlaylist(title, description: descController.text.trim());
+                    .createPlaylist(
+                      title,
+                      description: descController.text.trim(),
+                    );
                 Navigator.pop(context);
               }
             },
-            child: const Text('Simpan'),
+            child: const AppText('Simpan'),
           ),
         ],
       ),
@@ -86,9 +95,9 @@ class LibraryScreen extends ConsumerWidget {
     final library = ref.watch(libraryProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text(
+        title: const AppText(
           'Koleksi Kamu',
           style: TextStyle(
             fontSize: 22,
@@ -99,8 +108,16 @@ class LibraryScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.add, color: Colors.white),
-            tooltip: 'Buat Playlist Baru',
+            tooltip: context.tr('Buat Playlist Baru'),
             onPressed: () => _showCreatePlaylistDialog(context, ref),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, color: Colors.white),
+            tooltip: context.tr('Pengaturan'),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
           ),
         ],
       ),
@@ -109,8 +126,10 @@ class LibraryScreen extends ConsumerWidget {
           // Liked Songs Card
           SliverToBoxAdapter(
             child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
               leading: Container(
                 width: 56,
                 height: 56,
@@ -126,7 +145,7 @@ class LibraryScreen extends ConsumerWidget {
                   child: Icon(Icons.favorite, color: Colors.white, size: 28),
                 ),
               ),
-              title: const Text(
+              title: const AppText(
                 'Lagu yang Disukai',
                 style: TextStyle(
                   color: AppColors.textPrimary,
@@ -134,7 +153,7 @@ class LibraryScreen extends ConsumerWidget {
                   fontSize: 15,
                 ),
               ),
-              subtitle: Text(
+              subtitle: AppText(
                 '${library.likedSongs.length} lagu',
                 style: const TextStyle(
                   color: AppColors.textSecondary,
@@ -156,7 +175,7 @@ class LibraryScreen extends ConsumerWidget {
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
+                child: AppText(
                   'Playlist Saya',
                   style: TextStyle(
                     color: AppColors.textPrimary,
@@ -167,60 +186,62 @@ class LibraryScreen extends ConsumerWidget {
               ),
             ),
             SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final playlist = library.playlists[index];
-                  return ListTile(
-                    leading: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceLight,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Icon(Icons.queue_music,
-                          color: AppColors.textMuted, size: 28),
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final playlist = library.playlists[index];
+                return ListTile(
+                  leading: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                    title: Text(
-                      playlist.title,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    child: const Icon(
+                      Icons.queue_music,
+                      color: AppColors.textMuted,
+                      size: 28,
                     ),
-                    subtitle: Text(
-                      '${playlist.songs.length} lagu',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                      ),
+                  ),
+                  title: Text(
+                    playlist.title,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline,
-                          color: AppColors.textMuted, size: 20),
-                      onPressed: () {
-                        ref
-                            .read(libraryProvider.notifier)
-                            .deletePlaylist(playlist.id);
-                      },
+                  ),
+                  subtitle: AppText(
+                    '${playlist.songs.length} lagu',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
                     ),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => PlaylistDetailScreen(playlist: playlist),
-                        ),
-                      );
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: AppColors.textMuted,
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      ref
+                          .read(libraryProvider.notifier)
+                          .deletePlaylist(playlist.id);
                     },
-                  );
-                },
-                childCount: library.playlists.length,
-              ),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            PlaylistDetailScreen(playlist: playlist),
+                      ),
+                    );
+                  },
+                );
+              }, childCount: library.playlists.length),
             ),
           ],
 
-          const SliverToBoxAdapter(
-            child: SizedBox(height: 100),
-          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );
@@ -236,10 +257,8 @@ class LikedSongsDetailScreen extends ConsumerWidget {
     final songs = library.likedSongs;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Lagu yang Disukai'),
-      ),
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(title: const AppText('Lagu yang Disukai')),
       floatingActionButton: songs.isNotEmpty
           ? FloatingActionButton(
               backgroundColor: AppColors.primary,
@@ -257,15 +276,18 @@ class LikedSongsDetailScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.favorite_border,
-                      size: 64, color: AppColors.textMuted),
+                  Icon(
+                    Icons.favorite_border,
+                    size: 64,
+                    color: AppColors.textMuted,
+                  ),
                   SizedBox(height: 16),
-                  Text(
+                  AppText(
                     'Belum ada lagu yang disukai',
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
                   SizedBox(height: 8),
-                  Text(
+                  AppText(
                     'Tekan tombol hati pada lagu apa pun untuk menyimpannya di sini',
                     style: TextStyle(color: AppColors.textMuted, fontSize: 12),
                   ),
@@ -301,10 +323,8 @@ class PlaylistDetailScreen extends ConsumerWidget {
     final songs = updatedPlaylist.songs;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(updatedPlaylist.title),
-      ),
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(title: Text(updatedPlaylist.title)),
       floatingActionButton: songs.isNotEmpty
           ? FloatingActionButton(
               backgroundColor: AppColors.primary,
@@ -322,10 +342,13 @@ class PlaylistDetailScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.music_off,
-                      size: 64, color: AppColors.textMuted),
+                  const Icon(
+                    Icons.music_off,
+                    size: 64,
+                    color: AppColors.textMuted,
+                  ),
                   const SizedBox(height: 16),
-                  const Text(
+                  const AppText(
                     'Playlist ini masih kosong',
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
@@ -335,7 +358,9 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         ? updatedPlaylist.description
                         : 'Tambahkan lagu dari menu opsi pada lagu',
                     style: const TextStyle(
-                        color: AppColors.textMuted, fontSize: 12),
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
