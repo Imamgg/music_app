@@ -1,8 +1,12 @@
+import 'library_provider.dart';
+import 'media_notification_handler.dart';
+import 'offline_provider.dart';
+import 'equalizer_provider.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 import '../../data/models/song_model.dart';
 import 'settings_provider.dart';
 import '../../data/repositories/youtube_audio_repository.dart';
@@ -85,13 +89,53 @@ final youtubeAudioRepoProvider = Provider<YoutubeAudioRepository>((ref) {
 final audioPlayerProvider =
     StateNotifierProvider<AudioPlayerNotifier, AudioPlayerState>((ref) {
       final ytRepo = ref.watch(youtubeAudioRepoProvider);
-      return AudioPlayerNotifier(ytRepo);
+      final notifier = AudioPlayerNotifier(
+        ytRepo,
+        onAudioSessionChanged: ref.read(equalizerProvider).attachSession,
+        localAudioPath: ref.read(offlineProvider).localPath,
+      );
+      final handler = mediaNotificationHandler;
+      if (handler != null) {
+        handler.onPlay = notifier.play;
+        handler.onPause = notifier.pause;
+        handler.onNext = notifier.playNext;
+        handler.onPrevious = notifier.playPrevious;
+        handler.onSeek = notifier.seek;
+        handler.onShuffle = notifier.toggleShuffle;
+        handler.onLike = () async {
+          final song = notifier.snapshot.currentSong;
+          if (song != null) {
+            await ref.read(libraryProvider.notifier).toggleLike(song);
+          }
+        };
+        final remove = notifier.addListener(
+          (state) => handler.publish(
+            state,
+            ref.read(libraryProvider).isLiked(state.currentSong?.id ?? ''),
+          ),
+        );
+        ref.listen(
+          libraryProvider,
+          (_, library) => handler.publish(
+            notifier.snapshot,
+            library.isLiked(notifier.snapshot.currentSong?.id ?? ''),
+          ),
+        );
+        ref.onDispose(() {
+          remove();
+          handler.detach();
+        });
+      }
+      return notifier;
     });
 
 class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
+  AudioPlayerState get snapshot => state;
+  final Future<String?> Function(String)? localAudioPath;
   final AudioPlayer _player;
   final YoutubeAudioRepository _ytRepo;
 
+  StreamSubscription<int?>? _audioSessionSub;
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<Duration?>? _durationSub;
@@ -107,10 +151,29 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
   bool _isCurrentLoad(int generation) =>
       mounted && generation == _loadGeneration;
 
-  AudioPlayerNotifier(this._ytRepo, {AudioPlayer? player})
-    : _player = player ?? AudioPlayer(),
-      super(const AudioPlayerState()) {
+  AudioPlayerNotifier(
+    this._ytRepo, {
+    AudioPlayer? player,
+    this.localAudioPath,
+    Future<void> Function(int?)? onAudioSessionChanged,
+  }) : _player =
+           player ??
+           AudioPlayer(
+             audioLoadConfiguration: const AudioLoadConfiguration(
+               androidLoadControl: AndroidLoadControl(
+                 bufferForPlaybackDuration: Duration(milliseconds: 750),
+               ),
+             ),
+           ),
+       super(const AudioPlayerState()) {
     _initAudioStreams();
+    if (onAudioSessionChanged != null &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android) {
+      _audioSessionSub = _player.androidAudioSessionIdStream.listen(
+        onAudioSessionChanged,
+      );
+    }
   }
 
   void _initAudioStreams() {
@@ -164,16 +227,21 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
     });
   }
 
-  /// Pre-fetching URL audio lagu berikutnya saat lagu mencapai 80% (Zero Buffer Transition)
+  /// Prepare the next URL after playback settles; this does not buffer audio.
+  Future<void> _prefetchOnline(SongModel song) async {
+    if (await localAudioPath?.call(song.id) != null || !mounted) return;
+    await _ytRepo.getAudioStream(song);
+  }
+
   void _checkAndPrefetchNext(Duration pos) {
     if (_hasPrefetchedNext || state.duration.inSeconds <= 0) return;
-    final progress = pos.inMilliseconds / state.duration.inMilliseconds;
-    if (progress >= 0.8 && state.hasNext) {
+    if (state.isLoadingStream || state.isBuffering || !state.isPlaying) return;
+    if (pos >= const Duration(seconds: 5) && state.hasNext) {
       _hasPrefetchedNext = true;
-      final nextIndex = state.currentIndex + 1;
+      final nextIndex = (state.currentIndex + 1) % state.queue.length;
       if (nextIndex < state.queue.length) {
         final nextSong = state.queue[nextIndex];
-        _ytRepo.getAudioStream(nextSong);
+        _prefetchOnline(nextSong);
       }
     }
   }
@@ -213,6 +281,13 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
     if (targetIndex >= 0) activeQueue[targetIndex] = song;
     _originalQueue = List.from(activeQueue);
 
+    if (state.currentSong?.id == song.id &&
+        (_sourceReady || state.isLoadingStream)) {
+      state = state.copyWith(queue: activeQueue, currentIndex: targetIndex);
+      await play();
+      return;
+    }
+
     state = state.copyWith(
       currentSong: song,
       queue: activeQueue,
@@ -230,6 +305,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
     bool isRetry = false,
     int? generation,
   }) async {
+    final startup = Stopwatch()..start();
     final request = generation ?? ++_loadGeneration;
     if (!_isCurrentLoad(request)) return;
     if (!isRetry) _wantsPlayback = true;
@@ -245,10 +321,15 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
       await _player.stop();
       if (!_isCurrentLoad(request)) return;
 
-      final streamResult = await _ytRepo.getAudioStream(
-        song,
-        forceRefresh: isRetry,
-      );
+      final lookupStarted = startup.elapsedMilliseconds;
+      final local = await localAudioPath?.call(song.id);
+      if (!_isCurrentLoad(request)) return;
+      final streamResult = local != null
+          ? AudioStreamResult(
+              streamUrl: Uri.file(local).toString(),
+              videoId: song.youtubeVideoId ?? song.id,
+            )
+          : await _ytRepo.getAudioStream(song, forceRefresh: isRetry);
       if (!_isCurrentLoad(request)) return;
       if (streamResult == null) {
         state = state.copyWith(
@@ -264,18 +345,21 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
       final cover = song.highResCoverUrl.isNotEmpty
           ? song.highResCoverUrl
           : song.coverUrl;
-      final artUri = cover.isNotEmpty && cover.startsWith('http')
+      final artUri =
+          local == null && cover.isNotEmpty && cover.startsWith('http')
           ? Uri.tryParse(cover)
           : null;
 
       final audioSource = AudioSource.uri(
         Uri.parse(streamResult.streamUrl),
-        headers: const {
-          'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': '*/*',
-          'Referer': 'https://www.youtube.com/',
-        },
+        headers: local != null
+            ? null
+            : const {
+                'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': '*/*',
+                'Referer': 'https://www.youtube.com/',
+              },
         tag: MediaItem(
           id: song.id,
           album: song.album.isNotEmpty ? song.album : 'AUNO Music',
@@ -286,8 +370,15 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
         ),
       );
 
+      final lookupMs = startup.elapsedMilliseconds - lookupStarted;
+      final prepareStarted = startup.elapsedMilliseconds;
       await _player.setAudioSource(audioSource);
       if (!_isCurrentLoad(request)) return;
+      if (kDebugMode) {
+        debugPrint(
+          'Audio startup: lookup=${lookupMs}ms, prepare=${startup.elapsedMilliseconds - prepareStarted}ms, local=${local != null}, retry=$isRetry',
+        );
+      }
       _sourceReady = true;
       state = state.copyWith(
         isLoadingStream: false,
@@ -476,6 +567,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> {
   @override
   void dispose() {
     _loadGeneration++;
+    _audioSessionSub?.cancel();
     _playerStateSub?.cancel();
     _playbackEventSub?.cancel();
     _positionSub?.cancel();

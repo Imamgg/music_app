@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../../core/utils/formatters.dart';
 import '../models/song_model.dart';
@@ -15,8 +16,14 @@ class AudioStreamResult {
 }
 
 class YoutubeAudioRepository {
-  YoutubeExplode _yt;
+  final YoutubeExplode _yt;
   final Map<String, AudioStreamResult> _cache = {};
+  final Map<String, String> _resolvedVideos = {};
+  final Map<String, DateTime> _cachedAt = {};
+  final Map<String, Future<AudioStreamResult?>> _pending = {};
+  final Future<AudioStreamResult?> Function(SongModel, String, bool)?
+  streamResolver;
+  bool _disposed = false;
   String quality = 'normal';
 
   static int selectBitrate(List<int> rates, String quality) {
@@ -29,7 +36,8 @@ class YoutubeAudioRepository {
     );
   }
 
-  YoutubeAudioRepository({YoutubeExplode? yt}) : _yt = yt ?? YoutubeExplode();
+  YoutubeAudioRepository({YoutubeExplode? yt, this.streamResolver})
+    : _yt = yt ?? YoutubeExplode();
 
   /// Ekstraksi URL audio untuk [song] dengan prioritas progressive stream (ratebypass=yes, MP4/AAC)
   /// yang didukung penuh oleh ExoPlayer Android tanpa kendala HTTP 403 Forbidden.
@@ -37,16 +45,69 @@ class YoutubeAudioRepository {
     SongModel song, {
     bool forceRefresh = false,
   }) async {
+    if (_disposed) return null;
     final selectedQuality = quality;
-    final cacheKey = '${song.id}|$selectedQuality';
-    // 1. Cek cache memori terlebih dahulu
-    if (!forceRefresh && _cache.containsKey(cacheKey)) {
-      return _cache[cacheKey];
+    final cacheKey = '${song.youtubeVideoId ?? song.id}|$selectedQuality';
+    if (!forceRefresh && _pending['$cacheKey|true'] != null) {
+      return _pending['$cacheKey|true'];
     }
+    if (forceRefresh) _cache.remove(cacheKey);
+    final cached = _cache[cacheKey];
+    final now = DateTime.now();
+    final expires = cached == null
+        ? null
+        : int.tryParse(
+            Uri.parse(cached.streamUrl).queryParameters['expire'] ?? '',
+          );
+    final fresh =
+        cached != null &&
+        now.difference(_cachedAt[cacheKey] ?? DateTime(1970)) <
+            const Duration(minutes: 5) &&
+        (expires == null ||
+            DateTime.fromMillisecondsSinceEpoch(
+              expires * 1000,
+            ).isAfter(now.add(const Duration(minutes: 1))));
+    if (!forceRefresh && fresh) return cached;
+    final pendingKey = '$cacheKey|$forceRefresh';
+    final existing = _pending[pendingKey];
+    if (existing != null) return existing;
+    // Refresh supersedes an older prefetch, without allowing its result to overwrite the cache.
     if (forceRefresh) {
-      _cache.remove(cacheKey);
+      _pending.remove('$cacheKey|false');
     }
+    final resolvedSong = song.youtubeVideoId?.isNotEmpty == true
+        ? song
+        : song.copyWith(youtubeVideoId: _resolvedVideos[song.id]);
+    late Future<AudioStreamResult?> request;
+    request =
+        Future<AudioStreamResult?>.sync(
+              () => streamResolver != null
+                  ? streamResolver!(resolvedSong, selectedQuality, forceRefresh)
+                  : _resolve(resolvedSong, selectedQuality, forceRefresh),
+            )
+            .then<AudioStreamResult?>((value) => value)
+            .timeout(const Duration(seconds: 30), onTimeout: () => null)
+            .catchError((Object _) => null)
+            .then((result) {
+              if (!_disposed && identical(_pending[pendingKey], request)) {
+                _pending.remove(pendingKey);
+                if (result != null) {
+                  _resolvedVideos[song.id] = result.videoId;
+                  _cache[cacheKey] = result;
+                  _cachedAt[cacheKey] = DateTime.now();
+                }
+              }
+              return result;
+            });
+    _pending[pendingKey] = request;
+    return request;
+  }
 
+  Future<AudioStreamResult?> _resolve(
+    SongModel song,
+    String selectedQuality,
+    bool forceRefresh,
+  ) async {
     try {
       // 2. Jika sudah memiliki videoId spesifik, ambil manifest langsung
       if (song.youtubeVideoId != null && song.youtubeVideoId!.isNotEmpty) {
@@ -56,7 +117,6 @@ class YoutubeAudioRepository {
           compatibility: forceRefresh,
         );
         if (directResult != null) {
-          _cache[cacheKey] = directResult;
           return directResult;
         }
       }
@@ -143,14 +203,14 @@ class YoutubeAudioRepository {
           ? scoredCandidates.map((e) => e.key).toList()
           : searchResults.take(3).toList();
 
-      for (final video in candidatesToTry) {
+      for (final video in candidatesToTry.take(3)) {
+        if (_disposed) return null;
         final result = await _extractBestAudio(
           video.id.value,
           selectedQuality,
           compatibility: forceRefresh,
         );
         if (result != null) {
-          _cache[cacheKey] = result;
           return result;
         }
       }
@@ -163,14 +223,17 @@ class YoutubeAudioRepository {
 
   Future<List<Video>> _searchWithRetry(String query) async {
     try {
-      final res = await _yt.search.search(query);
+      final res = await _yt.search
+          .search(query)
+          .timeout(const Duration(seconds: 8));
       return res.toList();
     } catch (_) {
-      // Re-init client jika connection broken
-      _yt.close();
-      _yt = YoutubeExplode();
+      // A search failure must not close concurrent playback/prefetch requests.
+      if (_disposed) return [];
       try {
-        final res = await _yt.search.search(query);
+        final res = await _yt.search
+            .search(query)
+            .timeout(const Duration(seconds: 8));
         return res.toList();
       } catch (_) {
         return [];
@@ -184,7 +247,9 @@ class YoutubeAudioRepository {
     bool compatibility = false,
   }) async {
     try {
-      final manifest = await _yt.videos.streamsClient.getManifest(videoId);
+      final manifest = await _yt.videos.streamsClient
+          .getManifest(videoId)
+          .timeout(const Duration(seconds: 10));
 
       final audioOnly = manifest.audioOnly.toList();
       if (audioOnly.isNotEmpty && !compatibility) {
@@ -258,10 +323,16 @@ class YoutubeAudioRepository {
   }
 
   void invalidateCache(String songId) {
-    _cache.removeWhere((key, _) => key.startsWith('$songId|'));
+    _cache.removeWhere(
+      (key, value) => key.startsWith('$songId|') || value.videoId == songId,
+    );
   }
 
   void dispose() {
+    _disposed = true;
+    _pending.clear();
+    _cache.clear();
+    _resolvedVideos.clear();
     _yt.close();
   }
 }

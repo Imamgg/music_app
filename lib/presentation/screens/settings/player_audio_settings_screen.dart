@@ -1,3 +1,4 @@
+import 'equalizer_settings_screen.dart';
 import 'package:auno/core/localization/app_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,6 +42,22 @@ class PlayerAudioSettingsScreen extends ConsumerWidget {
                         .setAudioQuality(quality);
                   }
                 },
+              ),
+            ],
+          ),
+          SettingsCardGroup(
+            title: 'Equalizer',
+            children: [
+              SettingsCardTile(
+                icon: Icons.tune,
+                title: 'Equalizer',
+                subtitle: 'Sesuaikan karakter suara dan bass.',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const EqualizerSettingsScreen(),
+                  ),
+                ),
               ),
             ],
           ),

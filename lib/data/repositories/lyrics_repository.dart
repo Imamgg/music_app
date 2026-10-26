@@ -17,10 +17,20 @@ class LyricsResult {
 
 class LyricsRepository {
   final Dio _dio;
+  final Dio _betterDio;
   final Map<String, LyricsResult> _cache = {};
 
-  LyricsRepository({Dio? dio})
-    : _dio =
+  LyricsRepository({Dio? dio, Dio? betterDio})
+    : _betterDio =
+          betterDio ??
+          Dio(
+            BaseOptions(
+              baseUrl: 'https://api.betterlyrics.org',
+              connectTimeout: const Duration(seconds: 6),
+              receiveTimeout: const Duration(seconds: 8),
+            ),
+          ),
+      _dio =
           dio ??
           Dio(
             BaseOptions(
@@ -34,12 +44,17 @@ class LyricsRepository {
             ),
           );
 
-  /// Mengambil lirik sinkron waktu dari LRCLIB
+  /// Prefer Better Lyrics, with the existing strict-match provider as fallback.
   Future<LyricsResult> getLyrics(SongModel song) async {
     final key =
         '${song.id}|${song.artist}|${song.title}|${song.album}|${song.durationSeconds}';
     if (_cache.containsKey(key)) return _cache[key]!;
 
+    final better = await _getBetterLyrics(song);
+    if (better != null) {
+      _cache[key] = better;
+      return better;
+    }
     final cleanTitle = Formatters.cleanTrackTitle(song.title);
 
     try {
@@ -94,6 +109,64 @@ class LyricsRepository {
 
     final emptyResult = const LyricsResult();
     return emptyResult;
+  }
+
+  Future<LyricsResult?> _getBetterLyrics(SongModel song) async {
+    final parameters = <String, dynamic>{
+      's': Formatters.cleanTrackTitle(song.title),
+      'a': song.artist,
+      'al': song.album == 'YouTube Music' ? '' : song.album,
+      'd': song.durationSeconds > 0 ? song.durationSeconds.toString() : '0',
+    };
+    if (parameters['s'].toString().isEmpty || song.artist.trim().isEmpty) {
+      return null;
+    }
+    for (final endpoint in ['/getLyrics', '/kugou/getLyrics']) {
+      try {
+        final response = await _betterDio.get(
+          endpoint,
+          queryParameters: {
+            ...parameters,
+            if (endpoint == '/getLyrics' &&
+                song.youtubeVideoId?.isNotEmpty == true)
+              'videoId': song.youtubeVideoId,
+          },
+        );
+        if (response.statusCode != 200 || response.data is! Map) continue;
+        final data = response.data as Map;
+        final score = data['score'];
+        if (score is num && (!score.isFinite || score < .8)) continue;
+        final raw = data[endpoint == '/getLyrics' ? 'ttml' : 'lyrics'];
+        if (raw is! String || raw.isEmpty) continue;
+        final lines = endpoint == '/getLyrics'
+            ? LyricLine.parseTtml(raw)
+            : LyricLine.parseLrc(raw);
+        if (lines.isEmpty ||
+            (song.durationSeconds > 0 &&
+                lines.last.timestamp.inSeconds > song.durationSeconds + 3)) {
+          continue;
+        }
+        return LyricsResult(
+          syncedLyrics: lines,
+          plainLyrics: lines.map((line) => line.text).join('\n'),
+          hasSyncedLyrics: true,
+        );
+      } on DioException catch (error) {
+        if (error.response?.statusCode == 429 ||
+            error.response?.statusCode == 503 ||
+            error.response == null) {
+          break;
+        }
+      } catch (_) {
+        /* Continue only for unusable responses. */
+      }
+    }
+    return null;
+  }
+
+  void dispose() {
+    _dio.close();
+    _betterDio.close();
   }
 
   /// Reject covers, other recordings and incompatible timings before ranking.

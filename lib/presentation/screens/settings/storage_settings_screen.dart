@@ -1,3 +1,4 @@
+import '../downloads/downloads_screen.dart';
 import 'package:auno/core/localization/app_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -82,6 +83,20 @@ class StorageSettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(0, 8, 0, 32),
         children: [
+          SettingsCardGroup(
+            title: 'Unduhan',
+            children: [
+              SettingsCardTile(
+                icon: Icons.offline_pin_outlined,
+                title: 'Unduhan',
+                subtitle: 'Musik tanpa internet',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const DownloadsScreen()),
+                ),
+              ),
+            ],
+          ),
           SettingsCardGroup(
             title: 'Memori & cache',
             children: [

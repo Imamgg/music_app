@@ -76,43 +76,43 @@ class HomeMusicNotifier extends StateNotifier<HomeMusicState> {
     await refresh(showLoadingIfEmpty: state.charts.isEmpty);
   }
 
+  int _refreshGeneration = 0;
   Future<void> refresh({bool showLoadingIfEmpty = false}) async {
-    if (showLoadingIfEmpty) {
-      state = state.copyWith(isLoading: true, errorMessage: null);
-    }
-
-    try {
-      final futures = await Future.wait([
-        _repo.getTopCharts(),
-        _repo.getCuratedPlaylists(),
-      ]);
-
-      if (!mounted) return;
-      final freshCharts = futures[0] as List<SongModel>;
-      final freshPlaylists = futures[1] as List<PlaylistModel>;
-
-      if (freshCharts.isNotEmpty) {
-        await _storage.cacheCharts(freshCharts, locale: _repo.cacheLocale);
-      }
-      if (freshPlaylists.isNotEmpty) {
-        await _storage.cachePlaylists(
-          freshPlaylists,
-          locale: _repo.cacheLocale,
-        );
-      }
-
-      if (!mounted) return;
-      state = state.copyWith(
-        charts: freshCharts.isNotEmpty ? freshCharts : state.charts,
-        playlists: freshPlaylists.isNotEmpty ? freshPlaylists : state.playlists,
-        isLoading: false,
-        errorMessage: null,
-      );
-    } catch (e) {
-      if (!mounted) return;
+    final generation = ++_refreshGeneration;
+    if (showLoadingIfEmpty) state = state.copyWith(isLoading: true);
+    bool current() => mounted && generation == _refreshGeneration;
+    await Future.wait([
+      () async {
+        try {
+          final tracks = await _repo.getTopCharts().timeout(
+            const Duration(seconds: 20),
+          );
+          if (!current() || tracks.isEmpty) return;
+          state = state.copyWith(charts: tracks);
+          try {
+            await _storage.cacheCharts(tracks, locale: _repo.cacheLocale);
+          } catch (_) {}
+        } catch (_) {}
+      }(),
+      () async {
+        try {
+          final playlists = await _repo.getCuratedPlaylists().timeout(
+            const Duration(seconds: 20),
+          );
+          if (!current() || playlists.isEmpty) return;
+          state = state.copyWith(playlists: playlists);
+          try {
+            await _storage.cachePlaylists(playlists, locale: _repo.cacheLocale);
+          } catch (_) {}
+        } catch (_) {}
+      }(),
+    ]);
+    if (current()) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: state.charts.isEmpty ? 'Gagal memuat musik: $e' : null,
+        errorMessage: state.charts.isEmpty && state.playlists.isEmpty
+            ? 'Musik belum dapat dimuat. Coba lagi.'
+            : null,
       );
     }
   }

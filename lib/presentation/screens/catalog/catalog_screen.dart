@@ -1,3 +1,4 @@
+import '../../providers/followed_artists_provider.dart';
 import 'package:auno/core/localization/app_strings.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -32,9 +33,25 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   Future<void> _toggleSaved(CatalogResult data) async {
     setState(() => _saving = true);
     try {
-      await ref
-          .read(storageRepoProvider)
-          .setCatalogSaved(_key(data), !_saved(data));
+      if (_album) {
+        await ref
+            .read(storageRepoProvider)
+            .setCatalogSaved(_key(data), !_saved(data));
+      } else {
+        final seed = (data.songs.isNotEmpty ? data.songs.first : widget.song)
+            .copyWith(
+              artist: data.title,
+              artistBrowseId: data.browseId,
+              coverUrl: data.imageUrl,
+              highResCoverUrl: data.imageUrl,
+              artists: data.browseId == null
+                  ? []
+                  : [ArtistCredit(name: data.title, browseId: data.browseId!)],
+            );
+        await ref
+            .read(followedArtistsProvider.notifier)
+            .setFollowed(_key(data), seed, !_saved(data));
+      }
       HapticFeedback.lightImpact();
     } catch (_) {
       if (mounted) {
@@ -74,6 +91,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(followedArtistsProvider);
     final request = (song: widget.song, kind: widget.kind);
     final result = ref.watch(catalogProvider(request));
     final data = result.valueOrNull;

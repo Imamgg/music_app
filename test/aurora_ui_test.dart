@@ -24,6 +24,14 @@ class TestPlayer extends AudioPlayerNotifier {
   TestPlayer(super.repo) {
     state = const AudioPlayerState(currentSong: song);
   }
+  void simulateLoading() {
+    state = state.copyWith(
+      isPlaying: true,
+      isLoadingStream: true,
+      isBuffering: true,
+    );
+  }
+
   int nextCount = 0;
   int previousCount = 0;
   int toggleCount = 0;
@@ -85,6 +93,12 @@ void main() {
     expect(player.previousCount, 1);
     await tester.tap(find.byTooltip('Putar'));
     expect(player.toggleCount, 1);
+    player.simulateLoading();
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byIcon(Icons.pause), findsOneWidget);
+    await tester.tap(find.byTooltip('Jeda'));
+    expect(player.toggleCount, 2);
     await tester.tap(find.byTooltip('Sukai lagu'));
     await tester.pump();
     expect(find.byTooltip('Hapus dari favorit'), findsOneWidget);

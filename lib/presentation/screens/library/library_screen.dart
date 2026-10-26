@@ -1,3 +1,5 @@
+import '../../widgets/followed_artists_section.dart';
+import '../downloads/downloads_screen.dart';
 import 'package:auno/core/localization/app_strings.dart';
 import '../../widgets/glass_dialog.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +10,10 @@ import '../../providers/audio_player_provider.dart';
 import '../../providers/library_provider.dart';
 import '../../widgets/song_tile_widget.dart';
 import '../settings/settings_screen.dart';
+
+final _libraryFilterProvider = StateProvider.autoDispose<String>(
+  (ref) => 'Semua',
+);
 
 class LibraryScreen extends ConsumerWidget {
   const LibraryScreen({super.key});
@@ -93,6 +99,7 @@ class LibraryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final library = ref.watch(libraryProvider);
+    final filter = ref.watch(_libraryFilterProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -123,55 +130,91 @@ class LibraryScreen extends ConsumerWidget {
       ),
       body: CustomScrollView(
         slivers: [
-          // Liked Songs Card
           SliverToBoxAdapter(
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: ['Semua', 'Playlist', 'Artis']
+                    .map(
+                      (value) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: AppText(value),
+                          selected: filter == value,
+                          onSelected: (_) =>
+                              ref.read(_libraryFilterProvider.notifier).state =
+                                  value,
+                        ),
+                      ),
+                    )
+                    .toList(),
               ),
-              leading: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF450AF5), Color(0xFFC4EFD9)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Center(
-                  child: Icon(Icons.favorite, color: Colors.white, size: 28),
-                ),
-              ),
-              title: const AppText(
-                'Lagu yang Disukai',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                ),
-              ),
-              subtitle: AppText(
-                '${library.likedSongs.length} lagu',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                ),
-              ),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const LikedSongsDetailScreen(),
-                  ),
-                );
-              },
             ),
           ),
+          if (filter != 'Artis')
+            SliverToBoxAdapter(
+              child: ListTile(
+                leading: const Icon(Icons.offline_pin_outlined),
+                title: const AppText('Unduhan'),
+                subtitle: const AppText('Musik tanpa internet'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const DownloadsScreen()),
+                ),
+              ),
+            ),
+          // Liked Songs Card
+          if (filter != 'Artis')
+            SliverToBoxAdapter(
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                leading: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF450AF5), Color(0xFFC4EFD9)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Center(
+                    child: Icon(Icons.favorite, color: Colors.white, size: 28),
+                  ),
+                ),
+                title: const AppText(
+                  'Lagu yang Disukai',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                subtitle: AppText(
+                  '${library.likedSongs.length} lagu',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const LikedSongsDetailScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
 
           // Custom Playlists
-          if (library.playlists.isNotEmpty) ...[
+          if (filter != 'Artis' && library.playlists.isNotEmpty) ...[
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -241,7 +284,9 @@ class LibraryScreen extends ConsumerWidget {
             ),
           ],
 
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          if (filter != 'Playlist')
+            const SliverToBoxAdapter(child: FollowedArtistsSection()),
+          const SliverToBoxAdapter(child: SizedBox(height: 140)),
         ],
       ),
     );

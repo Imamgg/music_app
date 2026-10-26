@@ -1,8 +1,67 @@
+import 'package:xml/xml.dart';
+
 class LyricLine {
   final Duration timestamp;
   final String text;
 
   const LyricLine({required this.timestamp, required this.text});
+
+  /// Preserve text nodes between spans: a span can contain just one syllable.
+  static List<LyricLine> parseTtml(String content) {
+    if (content.trim().isEmpty || content.length > 2000000) return [];
+    Duration? time(String? input) {
+      if (input == null) return null;
+      final value = input.trim();
+      double? seconds;
+      if (value.endsWith('ms')) {
+        final ms = double.tryParse(value.substring(0, value.length - 2));
+        seconds = ms == null ? null : ms / 1000;
+      } else if (value.endsWith('s')) {
+        seconds = double.tryParse(value.substring(0, value.length - 1));
+      } else {
+        final parts = value.split(':');
+        if (parts.length > 3) return null;
+        var total = 0.0;
+        for (final part in parts) {
+          final number = double.tryParse(part);
+          if (number == null) return null;
+          total = total * 60 + number;
+        }
+        seconds = total;
+      }
+      if (seconds == null || !seconds.isFinite || seconds < 0) return null;
+      return Duration(milliseconds: (seconds * 1000).round());
+    }
+
+    try {
+      final document = XmlDocument.parse(content);
+      final lines = <LyricLine>[];
+      for (final body in document.descendants.whereType<XmlElement>().where(
+        (element) => element.name.local == 'body',
+      )) {
+        for (final paragraph in body.descendants.whereType<XmlElement>().where(
+          (element) => element.name.local == 'p',
+        )) {
+          var start = time(paragraph.getAttribute('begin'));
+          start ??= paragraph.descendants
+              .whereType<XmlElement>()
+              .map((element) => time(element.getAttribute('begin')))
+              .whereType<Duration>()
+              .fold<Duration?>(null, (a, b) => a == null || b < a ? b : a);
+          final text = paragraph.innerText
+              .replaceAll(RegExp(r'\s+'), ' ')
+              .trim();
+          if (start != null && text.isNotEmpty) {
+            lines.add(LyricLine(timestamp: start, text: text));
+          }
+        }
+      }
+      lines.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      return lines;
+    } catch (_) {
+      return [];
+    }
+  }
 
   /// Mengonversi teks format .LRC (Time-synced lyrics) menjadi daftar [LyricLine]
   static List<LyricLine> parseLrc(String lrcContent) {

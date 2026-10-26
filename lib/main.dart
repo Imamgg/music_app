@@ -1,3 +1,4 @@
+import 'presentation/providers/media_notification_handler.dart';
 import 'presentation/widgets/liquid_aurora.dart';
 import 'presentation/providers/settings_provider.dart';
 import 'core/localization/app_strings.dart';
@@ -5,7 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'package:audio_service/audio_service.dart';
 
 import 'core/theme/app_theme.dart';
 import 'data/repositories/storage_repository.dart';
@@ -27,13 +28,20 @@ Future<void> main() async {
 
   // Inisialisasi background audio service
   try {
-    await JustAudioBackground.init(
-      androidNotificationChannelId: 'com.auno.app.channel.audio',
-      androidNotificationChannelName: 'AUNO Music Playback',
-      androidNotificationOngoing: true,
+    mediaNotificationHandler = await AudioService.init<AunoMediaHandler>(
+      builder: AunoMediaHandler.new,
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'com.auno.app.channel.audio',
+        androidNotificationChannelName: 'AUNO Music Playback',
+        androidNotificationOngoing: true,
+        androidNotificationIcon: 'drawable/auno_notification',
+        notificationColor: Color(0xFF52BBA9),
+        artDownscaleWidth: 512,
+        artDownscaleHeight: 512,
+      ),
     );
   } catch (e) {
-    debugPrint('JustAudioBackground init warning: $e');
+    debugPrint('AudioService init warning: $e');
   }
 
   // Inisialisasi penyimpanan lokal untuk lagu favorit & playlist

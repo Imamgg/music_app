@@ -79,6 +79,37 @@ void main() {
     repo.dispose();
   });
   test(
+    'Downloaded track plays from file without resolving any network stream',
+    () async {
+      notifier.dispose();
+      notifier = AudioPlayerNotifier(
+        repo,
+        player: engine,
+        localAudioPath: (_) async => 'E:/offline/recording.audio',
+      );
+      await notifier.playSong(track);
+      expect(repo.pending, isEmpty);
+      expect((engine.loaded as UriAudioSource).uri.scheme, 'file');
+      expect(notifier.state.isPlaying, true);
+      expect(notifier.state.currentSong?.artist, track.artist);
+    },
+  );
+  test(
+    'Selecting the current song resumes without stopping or loading a new source',
+    () async {
+      final loading = notifier.playSong(track);
+      await Future<void>.delayed(Duration.zero);
+      repo.pending['a']!.complete(result);
+      await loading;
+      final source = engine.loaded;
+      await notifier.pause();
+      await notifier.playSong(track);
+      expect(identical(engine.loaded, source), true);
+      expect(notifier.state.isPlaying, true);
+      expect(notifier.state.isLoadingStream, false);
+    },
+  );
+  test(
     'Loading clears without waiting for playback to end; pause/resume responds immediately',
     () async {
       final loading = notifier.playSong(track);

@@ -171,9 +171,6 @@ class MiniPlayerWidget extends ConsumerWidget {
                       ),
                       icon: PlaybackControlIcon(
                         isPlaying: playerState.isPlaying,
-                        isBusy:
-                            playerState.isLoadingStream ||
-                            playerState.isBuffering,
                       ),
                       onPressed: () {
                         HapticFeedback.lightImpact();

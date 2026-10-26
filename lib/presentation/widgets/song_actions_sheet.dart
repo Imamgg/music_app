@@ -1,3 +1,5 @@
+import 'download_song_tile.dart';
+import '../screens/settings/equalizer_settings_screen.dart';
 import 'package:auno/core/localization/app_strings.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -9,7 +11,7 @@ import 'add_to_playlist_sheet.dart';
 import 'sleep_timer_bottom_sheet.dart';
 import 'glass_surface.dart';
 
-enum SongAction { playlist, artist, album, queue, timer, settings }
+enum SongAction { playlist, artist, album, queue, timer, settings, equalizer }
 
 Future<void> showSongActions(
   BuildContext context,
@@ -91,7 +93,13 @@ Future<void> showSongActions(
                   title: const AppText('Tambah ke antrean'),
                   onTap: () => Navigator.pop(context, SongAction.queue),
                 ),
+              DownloadSongTile(song: song),
               if (playerOptions) ...[
+                ListTile(
+                  leading: const Icon(Icons.tune),
+                  title: const AppText('Equalizer'),
+                  onTap: () => Navigator.pop(context, SongAction.equalizer),
+                ),
                 ListTile(
                   leading: const Icon(Icons.bedtime_outlined),
                   title: const AppText('Waktu tidur'),
@@ -130,6 +138,11 @@ Future<void> showSongActions(
       onAddToQueue?.call();
     case SongAction.timer:
       SleepTimerBottomSheet.show(context);
+    case SongAction.equalizer:
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const EqualizerSettingsScreen()),
+      );
     case SongAction.settings:
       await Navigator.push(
         context,

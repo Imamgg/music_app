@@ -26,6 +26,43 @@ class StorageRepository {
     return StorageRepository(prefs);
   }
 
+  Map<String, dynamic> getAudioEffects() {
+    try {
+      return Map<String, dynamic>.from(
+        jsonDecode(_prefs.getString('auno_audio_effects') ?? '{}') as Map,
+      );
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> saveAudioEffects(Map<String, dynamic> value) async {
+    await _prefs.setString('auno_audio_effects', jsonEncode(value));
+  }
+
+  List<SongModel> getFollowedArtists() {
+    try {
+      return (jsonDecode(_prefs.getString('auno_followed_artists') ?? '[]')
+              as List)
+          .map(
+            (value) =>
+                SongModel.fromJson(Map<String, dynamic>.from(value as Map)),
+          )
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> saveFollowedArtists(List<SongModel> artists) async {
+    if (!await _prefs.setString(
+      'auno_followed_artists',
+      jsonEncode(artists.map((artist) => artist.toJson()).toList()),
+    )) {
+      throw StateError('Unable to save artists');
+    }
+  }
+
   Set<String> getSavedCatalogs() =>
       (_prefs.getStringList('auno_saved_catalogs') ?? []).toSet();
   Future<void> setCatalogSaved(String key, bool saved) async {

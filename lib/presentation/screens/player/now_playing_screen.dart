@@ -1,3 +1,4 @@
+import 'lyrics_screen.dart';
 import 'package:auno/core/localization/app_strings.dart';
 import '../../widgets/playback_control_icon.dart';
 import 'package:auno/core/constants/app_colors.dart';
@@ -132,10 +133,18 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
                 child: _showLyrics
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 20),
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: GlassSurface(
-                          child: SyncedLyricsWidget(key: ValueKey('lyrics')),
+                          child: SyncedLyricsWidget(
+                            key: const ValueKey('lyrics'),
+                            onExpand: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const LyricsScreen(),
+                              ),
+                            ),
+                          ),
                         ),
                       )
                     : _buildArtwork(
@@ -257,9 +266,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
                       child: Center(
                         child: PlaybackControlIcon(
                           isPlaying: playerState.isPlaying,
-                          isBusy:
-                              playerState.isLoadingStream ||
-                              playerState.isBuffering,
                           color: Colors.black,
                           size: 36,
                         ),

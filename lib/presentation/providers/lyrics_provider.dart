@@ -5,7 +5,9 @@ import '../../data/repositories/lyrics_repository.dart';
 import 'audio_player_provider.dart';
 
 final lyricsRepositoryProvider = Provider<LyricsRepository>((ref) {
-  return LyricsRepository();
+  final repository = LyricsRepository();
+  ref.onDispose(repository.dispose);
+  return repository;
 });
 
 class LyricsState {
