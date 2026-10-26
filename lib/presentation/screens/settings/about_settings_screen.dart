@@ -1,3 +1,4 @@
+import '../../widgets/auno_logo.dart';
 import 'dart:math' as math;
 import 'package:auno/core/localization/app_strings.dart';
 import 'package:flutter/material.dart';
@@ -47,28 +48,9 @@ class AboutSettingsScreen extends StatelessWidget {
             padding: const EdgeInsets.all(22),
             child: Row(
               children: [
-                Container(
-                  width: 62,
-                  height: 62,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [AppColors.primaryLight, AppColors.primaryDark],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: .16),
-                        blurRadius: 24,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.graphic_eq_rounded,
-                    size: 34,
-                    color: AppColors.background,
-                  ),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: const AunoLogo(size: 72),
                 ),
                 const SizedBox(width: 18),
                 const Expanded(

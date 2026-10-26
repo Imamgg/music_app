@@ -1,3 +1,5 @@
+import 'package:auno/presentation/widgets/auno_logo.dart';
+import 'package:auno/presentation/widgets/auno_splash.dart';
 import 'package:auno/core/localization/app_strings.dart';
 import 'package:auno/data/repositories/storage_repository.dart';
 import 'package:auno/main.dart';
@@ -26,6 +28,12 @@ void main() {
       addTearDown(container.dispose);
       await tester.pumpWidget(
         UncontrolledProviderScope(container: container, child: const AunoApp()),
+      );
+      await tester.runAsync(
+        () => precacheImage(
+          const AssetImage(AunoLogo.asset),
+          tester.element(find.byType(AunoSplash)),
+        ),
       );
       await tester.pumpAndSettle();
       final repository = container.read(youtubeMusicRepoProvider);
@@ -61,6 +69,12 @@ void main() {
     addTearDown(container.dispose);
     await tester.pumpWidget(
       UncontrolledProviderScope(container: container, child: const AunoApp()),
+    );
+    await tester.runAsync(
+      () => precacheImage(
+        const AssetImage(AunoLogo.asset),
+        tester.element(find.byType(AunoSplash)),
+      ),
     );
     await tester.pumpAndSettle();
     final context = tester.element(find.text('Beranda'));

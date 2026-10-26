@@ -1,3 +1,4 @@
+import 'presentation/widgets/auno_splash.dart';
 import 'presentation/providers/media_notification_handler.dart';
 import 'presentation/widgets/liquid_aurora.dart';
 import 'presentation/providers/settings_provider.dart';
@@ -75,8 +76,12 @@ class AunoApp extends ConsumerWidget {
       ],
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      builder: (context, child) =>
-          Stack(fit: StackFit.expand, children: [const LiquidAurora(), child!]),
+      builder: (context, child) => AunoSplash(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [const LiquidAurora(), child!],
+        ),
+      ),
       home: const MainShell(),
     );
   }

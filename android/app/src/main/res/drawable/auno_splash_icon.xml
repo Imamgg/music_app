@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Suppress Android's separately scaled/masked icon to avoid a double splash. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <size android:width="288dp" android:height="288dp" />
+    <solid android:color="@android:color/transparent" />
+</shape>
